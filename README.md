@@ -101,6 +101,22 @@ npm run build
 npm test
 ```
 
+## הרצה בשרת עם PM2 / Running on a Server with PM2
+
+```bash
+# Install PM2 globally (once)
+npm install -g pm2
+
+# Build the production bundle
+npm run build
+
+# Serve the build folder on the port from .env (defaults to 3000)
+pm2 serve build 3000 --name seachten-therapeutic-game --spa
+
+# Save the PM2 process list for reboot persistence
+pm2 save
+```
+
 ## תרומה לפרויקט / Contributing
 נשמח לקבל תרומות לפרויקט! אנא פתח issue או שלח pull request.
 
