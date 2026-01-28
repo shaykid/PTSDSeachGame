@@ -63,6 +63,12 @@ const BALL_BOUNCE_DAMPING = 0.8;
 const MAX_BALL_SPEED = 13;
 const AI_REACTION_DISTANCE = 300;
 const AI_PREDICTION_TIME = 30;
+const WAIT_START = Number(
+  process.env.REACT_APP_WAIT_START ?? process.env.WAIT_START ?? 18
+) || 18;
+const BUTTON_WAIT = Number(
+  process.env.REACT_APP_BUTTON_WAIT ?? process.env.BUTTON_WAIT ?? 5
+) || 5;
 const HISTORY_IMAGE_FILES = [
   '0bb921c5-b38c-4aa1-bed0-678ab0d8fa08.jpeg',
   '0f9a6eb6-b7ce-48b4-a477-5eaf7ee7dd15.jpeg',
@@ -160,6 +166,8 @@ const SlimeSoccer = () => {
   const startGameTimeoutRef = useRef(null);
   const idleAudioRef = useRef(null);
   const idleAudioTimeoutRef = useRef(null);
+  const historyImageCountRef = useRef(0);
+  const waitSoundPlayedRef = useRef(false);
   
   // Game state
   const [gameMode, setGameMode] = useState(null);
@@ -285,23 +293,29 @@ const SlimeSoccer = () => {
   }, []);
 
   useEffect(() => {
-    const scheduleIdleAudio = () => {
+    const shouldRunButtonWait =
+      selectionStep !== 'mode' && !gameStarted && !winner && BUTTON_WAIT > 0;
+
+    const scheduleButtonWaitAudio = () => {
       if (idleAudioTimeoutRef.current) {
         clearTimeout(idleAudioTimeoutRef.current);
+      }
+      if (!shouldRunButtonWait) {
+        return;
       }
       idleAudioTimeoutRef.current = setTimeout(() => {
         if (idleAudioRef.current) {
           idleAudioRef.current.currentTime = 0;
           idleAudioRef.current.play().catch(() => {});
         }
-      }, 1500);
+      }, BUTTON_WAIT * 1000);
     };
 
     const handleUserActivity = () => {
-      scheduleIdleAudio();
+      scheduleButtonWaitAudio();
     };
 
-    scheduleIdleAudio();
+    scheduleButtonWaitAudio();
     window.addEventListener('keydown', handleUserActivity);
     window.addEventListener('mousedown', handleUserActivity);
     window.addEventListener('touchstart', handleUserActivity);
@@ -314,10 +328,26 @@ const SlimeSoccer = () => {
         clearTimeout(idleAudioTimeoutRef.current);
       }
     };
-  }, []);
+  }, [BUTTON_WAIT, gameStarted, selectionStep, winner]);
+
+  const handleHistoryImageShown = useCallback(() => {
+    if (waitSoundPlayedRef.current || WAIT_START <= 0) {
+      return;
+    }
+    historyImageCountRef.current += 1;
+    if (historyImageCountRef.current >= WAIT_START) {
+      waitSoundPlayedRef.current = true;
+      if (idleAudioRef.current) {
+        idleAudioRef.current.currentTime = 0;
+        idleAudioRef.current.play().catch(() => {});
+      }
+    }
+  }, [WAIT_START]);
 
   useEffect(() => {
     if (selectionStep !== 'mode' || !displayHistoryImages) {
+      historyImageCountRef.current = 0;
+      waitSoundPlayedRef.current = false;
       setHistoryOverlay((prev) => ({ ...prev, visible: false }));
       return;
     }
@@ -348,6 +378,7 @@ const SlimeSoccer = () => {
         setTimeout(() => {
           if (cancelled) return;
           setHistoryOverlay((prev) => ({ ...prev, visible: true }));
+          handleHistoryImageShown();
         }, 50)
       );
 
@@ -366,13 +397,15 @@ const SlimeSoccer = () => {
       );
     };
 
+    historyImageCountRef.current = 0;
+    waitSoundPlayedRef.current = false;
     scheduleCycle();
 
     return () => {
       cancelled = true;
       timeouts.forEach((timeoutId) => clearTimeout(timeoutId));
     };
-  }, [displayHistoryImages, resourceBaseUrl, selectionStep]);
+  }, [displayHistoryImages, handleHistoryImageShown, resourceBaseUrl, selectionStep]);
 
   const triggerGoalCelebration = useCallback(() => {
     if (goalTimeoutRef.current) {
@@ -1882,28 +1915,28 @@ const SlimeSoccer = () => {
 
           {gameStarted && isTouchDevice && (
             <div className="touch-controls">
+              <div className="touch-group">
+                <div className="touch-row">
+                  <TouchButton label="↑" actionKey="arrowup" />
+                </div>
+                <div className="touch-row">
+                  <TouchButton label="→" actionKey="arrowright" />
+                  <TouchButton label="↓" actionKey="arrowdown" />
+                  <TouchButton label="←" actionKey="arrowleft" />
+                </div>
+              </div>
               {playerMode === 'multi' && (
                 <div className="touch-group">
                   <div className="touch-row">
                     <TouchButton label="W" actionKey="w" />
                   </div>
                   <div className="touch-row">
-                    <TouchButton label="A" actionKey="a" />
-                    <TouchButton label="S" actionKey="s" />
                     <TouchButton label="D" actionKey="d" />
+                    <TouchButton label="S" actionKey="s" />
+                    <TouchButton label="A" actionKey="a" />
                   </div>
                 </div>
               )}
-              <div className="touch-group">
-                <div className="touch-row">
-                  <TouchButton label="↑" actionKey="arrowup" />
-                </div>
-                <div className="touch-row">
-                  <TouchButton label="←" actionKey="arrowleft" />
-                  <TouchButton label="↓" actionKey="arrowdown" />
-                  <TouchButton label="→" actionKey="arrowright" />
-                </div>
-              </div>
             </div>
           )}
 
