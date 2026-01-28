@@ -81,6 +81,8 @@ const SlimeSoccer = () => {
   const goalAudioRef = useRef(null);
   const goalTimeoutRef = useRef(null);
   const startGameTimeoutRef = useRef(null);
+  const idleAudioRef = useRef(null);
+  const idleAudioTimeoutRef = useRef(null);
   
   // Game state
   const [gameMode, setGameMode] = useState(null);
@@ -171,6 +173,7 @@ const SlimeSoccer = () => {
 
   useEffect(() => {
     goalAudioRef.current = new Audio(`${resourceBaseUrl}/goal.mp3`);
+    idleAudioRef.current = new Audio(`${resourceBaseUrl}/mind-the-gap.mp3`);
 
     return () => {
       if (goalTimeoutRef.current) {
@@ -178,6 +181,41 @@ const SlimeSoccer = () => {
       }
       if (startGameTimeoutRef.current) {
         clearTimeout(startGameTimeoutRef.current);
+      }
+      if (idleAudioTimeoutRef.current) {
+        clearTimeout(idleAudioTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const scheduleIdleAudio = () => {
+      if (idleAudioTimeoutRef.current) {
+        clearTimeout(idleAudioTimeoutRef.current);
+      }
+      idleAudioTimeoutRef.current = setTimeout(() => {
+        if (idleAudioRef.current) {
+          idleAudioRef.current.currentTime = 0;
+          idleAudioRef.current.play().catch(() => {});
+        }
+      }, 1500);
+    };
+
+    const handleUserActivity = () => {
+      scheduleIdleAudio();
+    };
+
+    scheduleIdleAudio();
+    window.addEventListener('keydown', handleUserActivity);
+    window.addEventListener('mousedown', handleUserActivity);
+    window.addEventListener('touchstart', handleUserActivity);
+
+    return () => {
+      window.removeEventListener('keydown', handleUserActivity);
+      window.removeEventListener('mousedown', handleUserActivity);
+      window.removeEventListener('touchstart', handleUserActivity);
+      if (idleAudioTimeoutRef.current) {
+        clearTimeout(idleAudioTimeoutRef.current);
       }
     };
   }, []);
