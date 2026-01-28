@@ -1837,37 +1837,41 @@ const SlimeSoccer = () => {
             <span className="text-red-400">{t('redTeam')}</span>
           </div>
           
-          <div className="flex gap-4 mb-8 flex-wrap justify-center">
-            <button
-              onClick={() => startGame('1min')}
-              className={`px-6 py-3 rounded ${lightButtonClasses}`}
-            >
-              {t('oneMinute')}
-            </button>
-            <button
-              onClick={() => startGame('2min')}
-              className={`px-6 py-3 rounded ${lightButtonClasses}`}
-            >
-              {t('twoMinutes')}
-            </button>
-            <button
-              onClick={() => startGame('4min')}
-              className={`px-6 py-3 rounded ${lightButtonClasses}`}
-            >
-              {t('fourMinutes')}
-            </button>
-            <button
-              onClick={() => startGame('8min')}
-              className={`px-6 py-3 rounded ${lightButtonClasses}`}
-            >
-              {t('eightMinutes')}
-            </button>
-            <button
-              onClick={() => startGame('worldcup')}
-              className={`px-6 py-3 rounded ${lightButtonClasses}`}
-            >
-              {t('worldCup')}
-            </button>
+          <div className="flex flex-col items-center gap-6 mb-8">
+            <div className="flex justify-center w-full">
+              <button
+                onClick={() => startGame('1min')}
+                className={`duration-button-large rounded ${lightButtonClasses}`}
+              >
+                {t('oneMinute')}
+              </button>
+            </div>
+            <div className="flex gap-4 flex-wrap justify-center">
+              <button
+                onClick={() => startGame('2min')}
+                className={`px-6 py-3 rounded ${lightButtonClasses}`}
+              >
+                {t('twoMinutes')}
+              </button>
+              <button
+                onClick={() => startGame('4min')}
+                className={`px-6 py-3 rounded ${lightButtonClasses}`}
+              >
+                {t('fourMinutes')}
+              </button>
+              <button
+                onClick={() => startGame('8min')}
+                className={`px-6 py-3 rounded ${lightButtonClasses}`}
+              >
+                {t('eightMinutes')}
+              </button>
+              <button
+                onClick={() => startGame('worldcup')}
+                className={`px-6 py-3 rounded ${lightButtonClasses}`}
+              >
+                {t('worldCup')}
+              </button>
+            </div>
           </div>
           
           <div className="text-sm text-gray-400 mb-4">
