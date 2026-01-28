@@ -82,6 +82,8 @@ const SlimeSoccer = () => {
   const lastFrameTimeRef = useRef(0);
   const backgroundImageRef = useRef(null);
   const logoImageRef = useRef(null);
+  const goalAudioRef = useRef(null);
+  const goalTimeoutRef = useRef(null);
   
   // Game state
   const [gameMode, setGameMode] = useState(null);
@@ -93,6 +95,8 @@ const SlimeSoccer = () => {
   const [selectionStep, setSelectionStep] = useState('mode'); // 'mode', 'shape', 'ball', 'duration'
   const [selectedShapes, setSelectedShapes] = useState({ left: null, right: null });
   const [selectedBall, setSelectedBall] = useState(null);
+  const [showGoalCelebration, setShowGoalCelebration] = useState(false);
+  const resourceBaseUrl = `${process.env.PUBLIC_URL}/resources`;
 
   const pickRandomShape = useCallback((excludeShape) => {
     const available = AVAILABLE_SHAPES.filter((shape) => shape !== excludeShape);
@@ -108,41 +112,42 @@ const SlimeSoccer = () => {
     bgCanvas.height = GAME_HEIGHT;
     const bgCtx = bgCanvas.getContext('2d');
     
-    // Create gradient background
-    const gradient = bgCtx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
-    gradient.addColorStop(0, '#1a4d2e');
-    gradient.addColorStop(1, '#0f2818');
-    bgCtx.fillStyle = gradient;
+    // Create light grey background
+    bgCtx.fillStyle = '#e5e5e5';
     bgCtx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-    
-    // Draw cannabis leaves (simplified)
-    bgCtx.globalAlpha = 0.1;
-    bgCtx.fillStyle = '#2d5a3d';
-    for (let i = 0; i < 8; i++) {
-      const x = (i * GAME_WIDTH / 7) + Math.random() * 50;
-      const y = Math.random() * GAME_HEIGHT;
-      drawCannabisLeaf(bgCtx, x, y, 60 + Math.random() * 40);
-    }
-    
-    // Draw diamonds
-    bgCtx.fillStyle = '#4de8ff';
-    bgCtx.globalAlpha = 0.08;
-    for (let i = 0; i < 6; i++) {
-      const x = Math.random() * GAME_WIDTH;
-      const y = Math.random() * GAME_HEIGHT;
-      drawDiamond(bgCtx, x, y, 50 + Math.random() * 30);
-    }
-    
-    bgCtx.globalAlpha = 1.0;
+
     backgroundImageRef.current = bgCanvas;
     
     // Load Seach logo
     const logoImg = new Image();
-    logoImg.crossOrigin = "anonymous";
-    logoImg.src = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTYsmOVQVtCnrAMr6xWSuiR4nRNuHoi2_vVbQ&s';
+    logoImg.src = `${resourceBaseUrl}/logo2.png`;
     logoImg.onload = () => {
       logoImageRef.current = logoImg;
     };
+  }, []);
+
+  useEffect(() => {
+    goalAudioRef.current = new Audio(`${resourceBaseUrl}/goal.mp3`);
+
+    return () => {
+      if (goalTimeoutRef.current) {
+        clearTimeout(goalTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const triggerGoalCelebration = useCallback(() => {
+    if (goalTimeoutRef.current) {
+      clearTimeout(goalTimeoutRef.current);
+    }
+    setShowGoalCelebration(true);
+    goalTimeoutRef.current = setTimeout(() => {
+      setShowGoalCelebration(false);
+    }, 3000);
+    if (goalAudioRef.current) {
+      goalAudioRef.current.currentTime = 0;
+      goalAudioRef.current.play().catch(() => {});
+    }
   }, []);
   
   const drawCannabisLeaf = (ctx, x, y, size) => {
@@ -702,9 +707,11 @@ const SlimeSoccer = () => {
     }
     
     if (state.ball.x <= BALL_RADIUS && state.ball.y > GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT) {
+      triggerGoalCelebration();
       setScore(prev => ({ ...prev, right: prev.right + 1 }));
       resetPositions();
     } else if (state.ball.x >= GAME_WIDTH - BALL_RADIUS && state.ball.y > GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT) {
+      triggerGoalCelebration();
       setScore(prev => ({ ...prev, left: prev.left + 1 }));
       resetPositions();
     }
@@ -765,7 +772,7 @@ const SlimeSoccer = () => {
         }
       }
     });
-  }, [playerMode, updateAI]);
+  }, [playerMode, triggerGoalCelebration, updateAI]);
 
   const drawHelmet = (ctx, x, y, radius, type) => {
     ctx.save();
@@ -1057,14 +1064,15 @@ const SlimeSoccer = () => {
     
     // Draw Seach logo in background
     if (logoImageRef.current) {
-      ctx.globalAlpha = 0.55;
-      const logoSize = 250;
+      ctx.globalAlpha = 0.7;
+      const logoWidth = 240;
+      const logoHeight = (logoImageRef.current.height / logoImageRef.current.width) * logoWidth;
       ctx.drawImage(
         logoImageRef.current,
-        GAME_WIDTH / 2 - logoSize / 2,
-        GAME_HEIGHT / 2 - logoSize / 2,
-        logoSize * 2,
-        logoSize
+        GAME_WIDTH / 2 - logoWidth / 2,
+        10,
+        logoWidth,
+        logoHeight
       );
       ctx.globalAlpha = 1.0;
     }
@@ -1240,7 +1248,7 @@ const SlimeSoccer = () => {
   );
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-gray-900 to-green-900 text-white p-4" dir="rtl">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-200 text-gray-900 p-4" dir="rtl">
       {selectionStep === 'mode' && (
         <div className="text-center">
           <h1 className="text-5xl font-bold mb-6 text-green-300" style={{fontFamily: 'Arial, sans-serif'}}>
@@ -1529,7 +1537,7 @@ const SlimeSoccer = () => {
       )}
       
       {(gameStarted || winner) && (
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center relative">
           <div className="bg-green-800 px-8 py-4 rounded-t-lg w-full flex justify-between items-center">
             <span className="text-xl font-bold">{t('cyanTeam')}: {score.left}</span>
             <span className="text-2xl font-mono">{formatTime(timeLeft)}</span>
@@ -1542,6 +1550,22 @@ const SlimeSoccer = () => {
             height={GAME_HEIGHT}
             className="border-4 border-green-700"
           />
+
+          {showGoalCelebration && (
+            <div className="fixed inset-0 flex flex-col items-center justify-center pointer-events-none z-50">
+              <img
+                src={`${resourceBaseUrl}/ball1.gif`}
+                alt="Goal celebration"
+                className="w-48 h-auto"
+              />
+              <div
+                className="mt-4 text-green-700 font-bold"
+                style={{ fontSize: 'clamp(32px, 20vw, 200px)' }}
+              >
+                גול
+              </div>
+            </div>
+          )}
           
           {winner && (
             <div className="mt-8 text-center">
