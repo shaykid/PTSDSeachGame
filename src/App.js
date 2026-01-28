@@ -154,6 +154,47 @@ const parseSetSizeParam = () => {
   }
 };
 
+const parseScreenSizeConfig = () => {
+  const raw = process.env.REACT_APP_SCREEN_SIZE ?? process.env.SCREEN_SIZE;
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw);
+    const widthMultiplier = Number(parsed.width ?? parsed.widthMultiplier ?? 1);
+    const heightMultiplier = Number(parsed.height ?? parsed.heightMultiplier ?? 1);
+    const view = typeof parsed.view === 'string' ? parsed.view.toLowerCase() : null;
+
+    return {
+      widthMultiplier: Number.isFinite(widthMultiplier) && widthMultiplier > 0 ? widthMultiplier : 1,
+      heightMultiplier:
+        Number.isFinite(heightMultiplier) && heightMultiplier > 0 ? heightMultiplier : 1,
+      view,
+    };
+  } catch (error) {
+    return null;
+  }
+};
+
+const getWindowDimensions = (screenSizeConfig) => {
+  const baseWidth = window.innerWidth;
+  const baseHeight = window.innerHeight;
+
+  const widthMultiplier = screenSizeConfig?.widthMultiplier ?? 1;
+  const heightMultiplier = screenSizeConfig?.heightMultiplier ?? 1;
+
+  let width = Math.round(baseWidth * widthMultiplier);
+  let height = Math.round(baseHeight * heightMultiplier);
+
+  if (screenSizeConfig?.view === 'portrait' && width > height) {
+    [width, height] = [height, width];
+  }
+  if (screenSizeConfig?.view === 'landscape' && height > width) {
+    [width, height] = [height, width];
+  }
+
+  return { width, height };
+};
+
 const SlimeSoccer = () => {
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
@@ -191,9 +232,9 @@ const SlimeSoccer = () => {
     (process.env.REACT_APP_DISPLAY_HISTORY_IMAGES ?? process.env.DISPLAY_HISTORY_IMAGES ?? 'TRUE')
       .toUpperCase() !== 'FALSE';
   const setSizeConfig = useMemo(() => parseSetSizeParam(), []);
+  const screenSizeConfig = useMemo(() => parseScreenSizeConfig(), []);
   const [gameDimensions, setGameDimensions] = useState(() => ({
-    width: window.innerWidth,
-    height: window.innerHeight,
+    ...getWindowDimensions(screenSizeConfig),
   }));
   const GAME_WIDTH = gameDimensions.width;
   const GAME_HEIGHT = gameDimensions.height;
@@ -227,8 +268,7 @@ const SlimeSoccer = () => {
   useEffect(() => {
     const handleResize = () => {
       setGameDimensions({
-        width: window.innerWidth,
-        height: window.innerHeight,
+        ...getWindowDimensions(screenSizeConfig),
       });
     };
 
