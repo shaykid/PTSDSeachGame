@@ -112,8 +112,8 @@ const SlimeSoccer = () => {
     bgCanvas.height = GAME_HEIGHT;
     const bgCtx = bgCanvas.getContext('2d');
     
-    // Create light grey background
-    bgCtx.fillStyle = '#e5e5e5';
+    // Create light green background for the game field
+    bgCtx.fillStyle = '#b8e6a3';
     bgCtx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
     backgroundImageRef.current = bgCanvas;
@@ -143,7 +143,7 @@ const SlimeSoccer = () => {
     setShowGoalCelebration(true);
     goalTimeoutRef.current = setTimeout(() => {
       setShowGoalCelebration(false);
-    }, 3000);
+    }, 1000);
     if (goalAudioRef.current) {
       goalAudioRef.current.currentTime = 0;
       goalAudioRef.current.play().catch(() => {});
@@ -1248,7 +1248,7 @@ const SlimeSoccer = () => {
   );
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-200 text-gray-900 p-4" dir="rtl">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-green-700 text-gray-900 p-4" dir="rtl">
       {selectionStep === 'mode' && (
         <div className="text-center">
           <h1 className="text-5xl font-bold mb-6 text-green-300" style={{fontFamily: 'Arial, sans-serif'}}>
@@ -1559,8 +1559,8 @@ const SlimeSoccer = () => {
                 className="w-48 h-auto"
               />
               <div
-                className="mt-4 text-green-700 font-bold"
-                style={{ fontSize: 'clamp(32px, 20vw, 200px)' }}
+                className="mt-4 text-green-700 font-bold goal-celebration-text"
+                style={{ fontSize: '20vw' }}
               >
                 גול
               </div>
