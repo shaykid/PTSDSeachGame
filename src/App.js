@@ -1047,9 +1047,9 @@ const SlimeSoccer = () => {
       const logoSize = 250;
       ctx.drawImage(
         logoImageRef.current,
-        GAME_WIDTH / 1.3 - logoSize / 2,
+        GAME_WIDTH / 2 - logoSize / 2,
         GAME_HEIGHT / 2 - logoSize / 2,
-        logoSize,
+        logoSize * 2,
         logoSize
       );
       ctx.globalAlpha = 1.0;
