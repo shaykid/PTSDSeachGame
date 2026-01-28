@@ -52,10 +52,10 @@ const locale = 'he-IL';
 const t = (key) => TRANSLATIONS['he-IL']?.[key] || TRANSLATIONS['he-IL'][key] || key;
 
 const GROUND_HEIGHT = 80;
-const SLIME_RADIUS = 40;
-const BALL_RADIUS = 10;
-const GOAL_WIDTH = 80;
-const GOAL_HEIGHT = 120;
+const SLIME_RADIUS = 80;
+const BALL_RADIUS = 20;
+const GOAL_WIDTH = 160;
+const GOAL_HEIGHT = 240;
 const GRAVITY = 0.6;
 const SLIME_SPEED = 5;
 const SLIME_JUMP_POWER = -12;
@@ -1081,12 +1081,20 @@ const SlimeSoccer = () => {
     // Draw Seach logo in background
     if (logoImageRef.current) {
       ctx.globalAlpha = 0.7;
-      const logoWidth = 240;
-      const logoHeight = (logoImageRef.current.height / logoImageRef.current.width) * logoWidth;
+      const originalWidth = logoImageRef.current.width;
+      const originalHeight = logoImageRef.current.height;
+      const targetWidth = GAME_WIDTH * 0.5;
+      const targetHeight = GAME_HEIGHT * 0.5;
+      const scale = Math.min(
+        targetWidth / originalWidth,
+        targetHeight / originalHeight
+      );
+      const logoWidth = originalWidth * scale;
+      const logoHeight = originalHeight * scale;
       ctx.drawImage(
         logoImageRef.current,
         GAME_WIDTH / 2 - logoWidth / 2,
-        10,
+        0,
         logoWidth,
         logoHeight
       );
