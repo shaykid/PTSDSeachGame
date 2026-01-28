@@ -65,6 +65,8 @@ const BALL_BOUNCE_DAMPING = 0.8;
 const MAX_BALL_SPEED = 13 * BALL_SPEED_MULTIPLIER;
 const AI_REACTION_DISTANCE = 300;
 const AI_PREDICTION_TIME = 30;
+const MULTI_IDLE_APPROACH_DELAY_MS = 1400;
+const MULTI_IDLE_APPROACH_SPEED = 0.6;
 const WAIT_START = Number(
   process.env.REACT_APP_WAIT_START ?? process.env.WAIT_START ?? 18
 ) || 18;
@@ -211,6 +213,7 @@ const SlimeSoccer = () => {
   const idleAudioTimeoutRef = useRef(null);
   const historyImageCountRef = useRef(0);
   const waitSoundPlayedRef = useRef(false);
+  const multiIdleStartRef = useRef(null);
   
   // Game state
   const [gameMode, setGameMode] = useState(null);
@@ -902,6 +905,8 @@ const SlimeSoccer = () => {
   const updatePhysics = useCallback(() => {
     const state = gameStateRef.current;
     const keys = keysRef.current;
+    const now = Date.now();
+    let shouldAutoApproach = false;
     
     if (playerMode === 'multi') {
       if (keys['a']) state.leftSlime.vx = -SLIME_SPEED;
@@ -923,6 +928,35 @@ const SlimeSoccer = () => {
       }
       
       state.rightSlime.isGrabbing = keys['arrowdown'];
+
+      const noInput = !(
+        keys['a'] ||
+        keys['d'] ||
+        keys['w'] ||
+        keys['s'] ||
+        keys['arrowleft'] ||
+        keys['arrowright'] ||
+        keys['arrowup'] ||
+        keys['arrowdown']
+      );
+      const leftIdle =
+        Math.abs(state.leftSlime.vx) < 0.1 &&
+        Math.abs(state.leftSlime.vy) < 0.1 &&
+        state.leftSlime.y >= GAME_HEIGHT - GROUND_HEIGHT - 1;
+      const rightIdle =
+        Math.abs(state.rightSlime.vx) < 0.1 &&
+        Math.abs(state.rightSlime.vy) < 0.1 &&
+        state.rightSlime.y >= GAME_HEIGHT - GROUND_HEIGHT - 1;
+
+      if (noInput && leftIdle && rightIdle) {
+        if (!multiIdleStartRef.current) {
+          multiIdleStartRef.current = now;
+        }
+        shouldAutoApproach =
+          now - multiIdleStartRef.current >= MULTI_IDLE_APPROACH_DELAY_MS;
+      } else {
+        multiIdleStartRef.current = null;
+      }
     } else {
       if (keys['arrowleft']) state.rightSlime.vx = -SLIME_SPEED;
       else if (keys['arrowright']) state.rightSlime.vx = SLIME_SPEED;
@@ -935,6 +969,16 @@ const SlimeSoccer = () => {
       state.rightSlime.isGrabbing = keys['arrowdown'];
       
       updateAI();
+    }
+
+    if (playerMode === 'multi' && shouldAutoApproach) {
+      const distanceToLeft = state.leftSlime.x - state.rightSlime.x;
+      if (Math.abs(distanceToLeft) > 5) {
+        state.rightSlime.vx =
+          Math.sign(distanceToLeft) * SLIME_SPEED * MULTI_IDLE_APPROACH_SPEED;
+      } else {
+        state.rightSlime.vx = 0;
+      }
     }
     
     [state.leftSlime, state.rightSlime].forEach((slime, index) => {
