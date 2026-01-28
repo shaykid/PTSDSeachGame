@@ -33,6 +33,53 @@ canvas {
   image-rendering: crisp-edges;
 }
 
+.game-canvas {
+  touch-action: none;
+}
+
+.touch-controls {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  pointer-events: none;
+}
+
+.touch-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.touch-row {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.touch-button {
+  min-width: 56px;
+  min-height: 56px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 2px solid #1a4d2e;
+  background: rgba(255, 255, 255, 0.85);
+  color: #1a4d2e;
+  font-size: 20px;
+  font-weight: 600;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.touch-button:active {
+  background: rgba(180, 255, 200, 0.9);
+}
+
 .goal-celebration-text {
   font-family: 'Solitreo', cursive;
   animation: goal-text-run 3s linear;
