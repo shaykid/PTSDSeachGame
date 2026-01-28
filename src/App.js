@@ -66,6 +66,14 @@ const BALL_BOUNCE_DAMPING = 0.8;
 const MAX_BALL_SPEED = 13;
 const AI_REACTION_DISTANCE = 300;
 const AI_PREDICTION_TIME = 30;
+const AVAILABLE_SHAPES = [
+  'helmetCamo',
+  'helmetDesert',
+  'helmetUrban',
+  'labrador',
+  'tank',
+  'sunflower',
+];
 
 const SlimeSoccer = () => {
   const canvasRef = useRef(null);
@@ -85,6 +93,12 @@ const SlimeSoccer = () => {
   const [selectionStep, setSelectionStep] = useState('mode'); // 'mode', 'shape', 'ball', 'duration'
   const [selectedShapes, setSelectedShapes] = useState({ left: null, right: null });
   const [selectedBall, setSelectedBall] = useState(null);
+
+  const pickRandomShape = useCallback((excludeShape) => {
+    const available = AVAILABLE_SHAPES.filter((shape) => shape !== excludeShape);
+    const pool = available.length ? available : AVAILABLE_SHAPES;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }, []);
   
   // Load background images
   useEffect(() => {
@@ -1270,38 +1284,56 @@ const SlimeSoccer = () => {
             <ShapeButton
               shape="helmetCamo"
               label={t('helmetCamo')}
-              onClick={() => setSelectedShapes({...selectedShapes, left: 'helmetCamo'})}
-              selected={selectedShapes.left === 'helmetCamo'}
+              onClick={() => setSelectedShapes({
+                ...selectedShapes,
+                [playerMode === 'single' ? 'right' : 'left']: 'helmetCamo',
+              })}
+              selected={(playerMode === 'single' ? selectedShapes.right : selectedShapes.left) === 'helmetCamo'}
             />
             <ShapeButton
               shape="helmetDesert"
               label={t('helmetDesert')}
-              onClick={() => setSelectedShapes({...selectedShapes, left: 'helmetDesert'})}
-              selected={selectedShapes.left === 'helmetDesert'}
+              onClick={() => setSelectedShapes({
+                ...selectedShapes,
+                [playerMode === 'single' ? 'right' : 'left']: 'helmetDesert',
+              })}
+              selected={(playerMode === 'single' ? selectedShapes.right : selectedShapes.left) === 'helmetDesert'}
             />
             <ShapeButton
               shape="helmetUrban"
               label={t('helmetUrban')}
-              onClick={() => setSelectedShapes({...selectedShapes, left: 'helmetUrban'})}
-              selected={selectedShapes.left === 'helmetUrban'}
+              onClick={() => setSelectedShapes({
+                ...selectedShapes,
+                [playerMode === 'single' ? 'right' : 'left']: 'helmetUrban',
+              })}
+              selected={(playerMode === 'single' ? selectedShapes.right : selectedShapes.left) === 'helmetUrban'}
             />
             <ShapeButton
               shape="labrador"
               label={t('labrador')}
-              onClick={() => setSelectedShapes({...selectedShapes, left: 'labrador'})}
-              selected={selectedShapes.left === 'labrador'}
+              onClick={() => setSelectedShapes({
+                ...selectedShapes,
+                [playerMode === 'single' ? 'right' : 'left']: 'labrador',
+              })}
+              selected={(playerMode === 'single' ? selectedShapes.right : selectedShapes.left) === 'labrador'}
             />
             <ShapeButton
               shape="tank"
               label={t('tank')}
-              onClick={() => setSelectedShapes({...selectedShapes, left: 'tank'})}
-              selected={selectedShapes.left === 'tank'}
+              onClick={() => setSelectedShapes({
+                ...selectedShapes,
+                [playerMode === 'single' ? 'right' : 'left']: 'tank',
+              })}
+              selected={(playerMode === 'single' ? selectedShapes.right : selectedShapes.left) === 'tank'}
             />
             <ShapeButton
               shape="sunflower"
               label={t('sunflower')}
-              onClick={() => setSelectedShapes({...selectedShapes, left: 'sunflower'})}
-              selected={selectedShapes.left === 'sunflower'}
+              onClick={() => setSelectedShapes({
+                ...selectedShapes,
+                [playerMode === 'single' ? 'right' : 'left']: 'sunflower',
+              })}
+              selected={(playerMode === 'single' ? selectedShapes.right : selectedShapes.left) === 'sunflower'}
             />
           </div>
           
@@ -1359,12 +1391,15 @@ const SlimeSoccer = () => {
             >
               {t('backButton')}
             </button>
-            {((playerMode === 'single' && selectedShapes.left) || 
+            {((playerMode === 'single' && selectedShapes.right) || 
               (playerMode === 'multi' && selectedShapes.left && selectedShapes.right)) && (
               <button
                 onClick={() => {
                   if (playerMode === 'single') {
-                    setSelectedShapes({...selectedShapes, right: 'helmetDesert'});
+                    setSelectedShapes((prev) => ({
+                      ...prev,
+                      left: pickRandomShape(prev.right),
+                    }));
                   }
                   setSelectionStep('ball');
                 }}
