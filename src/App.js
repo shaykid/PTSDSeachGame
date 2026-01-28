@@ -266,17 +266,18 @@ const SlimeSoccer = () => {
 
     let cancelled = false;
     const timeouts = [];
-    const fadeDuration = 1000;
-    const visibleDuration = 2000;
-    const pauseDuration = 2000;
-    const maxOffset = 33.3333;
+    const fadeDuration = 0;
+    const visibleDuration = 1000;
+    const pauseDuration = 0;
+    const minCenterOffset = 25;
+    const maxCenterOffset = 75;
 
     const scheduleCycle = () => {
       if (cancelled) return;
       const pick = HISTORY_IMAGE_FILES[Math.floor(Math.random() * HISTORY_IMAGE_FILES.length)];
       const position = {
-        x: Math.random() * maxOffset,
-        y: Math.random() * maxOffset
+        x: minCenterOffset + Math.random() * (maxCenterOffset - minCenterOffset),
+        y: minCenterOffset + Math.random() * (maxCenterOffset - minCenterOffset)
       };
 
       setHistoryOverlay({
@@ -1499,17 +1500,23 @@ const SlimeSoccer = () => {
       {selectionStep === 'mode' && (
         <div className="text-center relative">
           {displayHistoryImages && historyOverlay.src && (
-            <div
-              className="fixed inset-0 pointer-events-none z-0"
-              style={{
-                backgroundImage: `url(${historyOverlay.src})`,
-                backgroundSize: '150% 150%',
-                backgroundPosition: `${historyOverlay.position.x}% ${historyOverlay.position.y}%`,
-                backgroundRepeat: 'no-repeat',
-                opacity: historyOverlay.visible ? 0.6 : 0,
-                transition: 'opacity 1s ease-in-out'
-              }}
-            />
+            <div className="fixed inset-0 pointer-events-none z-0">
+              <img
+                src={historyOverlay.src}
+                alt=""
+                className="absolute"
+                style={{
+                  width: '30vw',
+                  height: '30vh',
+                  left: `${historyOverlay.position.x}%`,
+                  top: `${historyOverlay.position.y}%`,
+                  transform: 'translate(-50%, -50%)',
+                  objectFit: 'contain',
+                  opacity: historyOverlay.visible ? 0.6 : 0,
+                  transition: 'opacity 0.2s ease-in-out'
+                }}
+              />
+            </div>
           )}
           <div className="relative z-10">
             <h1 className="text-5xl font-bold mb-6 text-green-300" style={{fontFamily: 'Arial, sans-serif'}}>
