@@ -72,6 +72,11 @@ const AVAILABLE_SHAPES = [
   'tank',
   'sunflower',
 ];
+const computeStartPositions = (fieldWidth) => {
+  const leftX = Math.max(SLIME_RADIUS + 10, GOAL_WIDTH * 0.6);
+  const rightX = Math.min(fieldWidth - SLIME_RADIUS - 10, fieldWidth - GOAL_WIDTH * 0.6);
+  return { leftX, rightX };
+};
 
 const SlimeSoccer = () => {
   const canvasRef = useRef(null);
@@ -94,6 +99,7 @@ const SlimeSoccer = () => {
   const [selectedShapes, setSelectedShapes] = useState({ left: null, right: null });
   const [selectedBall, setSelectedBall] = useState(null);
   const [showGoalCelebration, setShowGoalCelebration] = useState(false);
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
   const resourceBaseUrl = `${process.env.PUBLIC_URL}/resources`;
   const [gameDimensions, setGameDimensions] = useState(() => ({
     width: window.innerWidth,
@@ -112,6 +118,17 @@ const SlimeSoccer = () => {
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    const checkTouchSupport = () => {
+      setIsTouchDevice(
+        window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0
+      );
+    };
+    checkTouchSupport();
+    window.addEventListener('resize', checkTouchSupport);
+    return () => window.removeEventListener('resize', checkTouchSupport);
   }, []);
 
   const pickRandomShape = useCallback((excludeShape) => {
@@ -220,22 +237,23 @@ const SlimeSoccer = () => {
   };
   
   // Game objects state
+  const initialPositions = computeStartPositions(GAME_WIDTH);
   const gameStateRef = useRef({
     leftSlime: {
-      x: 200,
+      x: initialPositions.leftX,
       y: GAME_HEIGHT - GROUND_HEIGHT,
       vx: 0,
       vy: 0,
       isGrabbing: false,
       hasBall: false,
       goalLineTime: 0,
-      targetX: 200,
+      targetX: initialPositions.leftX,
       lastDecisionTime: 0,
       decisionCooldown: 0,
       stableStart: true
     },
     rightSlime: {
-      x: 600,
+      x: initialPositions.rightX,
       y: GAME_HEIGHT - GROUND_HEIGHT,
       vx: 0,
       vy: 0,
@@ -317,19 +335,20 @@ const SlimeSoccer = () => {
 
   const resetPositions = () => {
     const state = gameStateRef.current;
-    state.leftSlime.x = 200;
+    const { leftX, rightX } = computeStartPositions(GAME_WIDTH);
+    state.leftSlime.x = leftX;
     state.leftSlime.y = GAME_HEIGHT - GROUND_HEIGHT;
     state.leftSlime.vx = 0;
     state.leftSlime.vy = 0;
     state.leftSlime.isGrabbing = false;
     state.leftSlime.hasBall = false;
     state.leftSlime.goalLineTime = 0;
-    state.leftSlime.targetX = 200;
+    state.leftSlime.targetX = leftX;
     state.leftSlime.lastDecisionTime = 0;
     state.leftSlime.decisionCooldown = 0;
     state.leftSlime.stableStart = true;
     
-    state.rightSlime.x = 600;
+    state.rightSlime.x = rightX;
     state.rightSlime.y = GAME_HEIGHT - GROUND_HEIGHT;
     state.rightSlime.vx = 0;
     state.rightSlime.vy = 0;
@@ -376,6 +395,7 @@ const SlimeSoccer = () => {
     const opponent = state.rightSlime;
     const ball = state.ball;
     const currentTime = Date.now();
+    const { leftX } = computeStartPositions(GAME_WIDTH);
     
     if (ai.decisionCooldown > 0) {
       ai.decisionCooldown--;
@@ -392,7 +412,7 @@ const SlimeSoccer = () => {
     }
     
     if (ai.stableStart && timeLeft > 55) {
-      ai.targetX = 200;
+      ai.targetX = leftX;
       ai.vx = 0;
       if (Math.abs(ball.x - ai.x) < 150 || timeLeft <= 55) {
         ai.stableStart = false;
@@ -1259,6 +1279,36 @@ const SlimeSoccer = () => {
   };
   const lightButtonClasses = 'bg-green-200 hover:bg-green-300 text-green-900 border-2 border-green-300';
 
+  const setKeyState = useCallback((key, pressed) => {
+    keysRef.current[key] = pressed;
+  }, []);
+
+  const TouchButton = ({ label, actionKey }) => (
+    <button
+      type="button"
+      className="touch-button"
+      onPointerDown={(event) => {
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        setKeyState(actionKey, true);
+      }}
+      onPointerUp={(event) => {
+        event.preventDefault();
+        setKeyState(actionKey, false);
+      }}
+      onPointerCancel={(event) => {
+        event.preventDefault();
+        setKeyState(actionKey, false);
+      }}
+      onPointerLeave={(event) => {
+        event.preventDefault();
+        setKeyState(actionKey, false);
+      }}
+    >
+      {label}
+    </button>
+  );
+
   const ShapeButton = ({ shape, label, onClick, selected }) => (
     <button
       onClick={onClick}
@@ -1573,8 +1623,35 @@ const SlimeSoccer = () => {
             ref={canvasRef}
             width={GAME_WIDTH}
             height={GAME_HEIGHT}
-            className="border-4 border-green-700 w-full h-full"
+            className="border-4 border-green-700 w-full h-full game-canvas"
           />
+
+          {gameStarted && isTouchDevice && (
+            <div className="touch-controls">
+              {playerMode === 'multi' && (
+                <div className="touch-group">
+                  <div className="touch-row">
+                    <TouchButton label="W" actionKey="w" />
+                  </div>
+                  <div className="touch-row">
+                    <TouchButton label="A" actionKey="a" />
+                    <TouchButton label="S" actionKey="s" />
+                    <TouchButton label="D" actionKey="d" />
+                  </div>
+                </div>
+              )}
+              <div className="touch-group">
+                <div className="touch-row">
+                  <TouchButton label="↑" actionKey="arrowup" />
+                </div>
+                <div className="touch-row">
+                  <TouchButton label="←" actionKey="arrowleft" />
+                  <TouchButton label="↓" actionKey="arrowdown" />
+                  <TouchButton label="→" actionKey="arrowright" />
+                </div>
+              </div>
+            </div>
+          )}
 
           {showGoalCelebration && (
             <div className="fixed inset-0 flex flex-col items-center justify-center pointer-events-none z-50">
