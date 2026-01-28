@@ -39,7 +39,20 @@ const TRANSLATIONS = {
     "cannabis": "פרח קנאביס",
     "player1": "שחקן 1 (שמאל)",
     "player2": "שחקן 2 (ימין)",
-    "chooseCharacter": "בחר את הדמות שלך"
+    "chooseCharacter": "בחר את הדמות שלך",
+    "remoteMultiplayer": "2 שחקנים במכשירים שונים",
+    "waitingForPlayer": "ממתין לשחקן שני...",
+    "scanQRCode": "סרקו את הקוד או שתפו את הקישור",
+    "shareLink": "שתף קישור",
+    "copyLink": "העתק קישור",
+    "linkCopied": "הקישור הועתק!",
+    "connecting": "מתחבר...",
+    "connected": "מחובר!",
+    "connectionFailed": "החיבור נכשל, נסו שוב",
+    "youAreHost": "אתה המארח (שחקן שמאל)",
+    "youAreGuest": "אתה האורח (שחקן ימין)",
+    "startRemoteGame": "התחל משחק",
+    "orShareLink": "או שתפו את הקישור:"
   }
 };
 
@@ -111,6 +124,185 @@ const AVAILABLE_SHAPES = [
   'tank',
   'sunflower',
 ];
+
+// Simple QR Code generator (QR Code Model 2, Version 1-4 for short URLs)
+const generateQRCode = (text, size = 200) => {
+  // QR Code encoding tables
+  const EC_CODEWORDS = { L: [7, 10, 15, 20], M: [10, 16, 26, 36], Q: [13, 22, 36, 52], H: [17, 28, 44, 64] };
+  const CAPACITY = { L: [17, 32, 53, 78], M: [14, 26, 42, 62], Q: [11, 20, 32, 46], H: [7, 14, 24, 34] };
+  const ALIGNMENT = [[], [6, 18], [6, 22], [6, 26]];
+
+  const ecLevel = 'M';
+  let version = 1;
+  for (let v = 1; v <= 4; v++) {
+    if (text.length <= CAPACITY[ecLevel][v - 1]) {
+      version = v;
+      break;
+    }
+  }
+
+  const moduleCount = version * 4 + 17;
+  const modules = Array(moduleCount).fill(null).map(() => Array(moduleCount).fill(null));
+
+  // Position patterns
+  const drawFinderPattern = (row, col) => {
+    for (let r = -1; r <= 7; r++) {
+      for (let c = -1; c <= 7; c++) {
+        const rr = row + r, cc = col + c;
+        if (rr < 0 || rr >= moduleCount || cc < 0 || cc >= moduleCount) continue;
+        if ((r >= 0 && r <= 6 && (c === 0 || c === 6)) ||
+            (c >= 0 && c <= 6 && (r === 0 || r === 6)) ||
+            (r >= 2 && r <= 4 && c >= 2 && c <= 4)) {
+          modules[rr][cc] = true;
+        } else {
+          modules[rr][cc] = false;
+        }
+      }
+    }
+  };
+
+  drawFinderPattern(0, 0);
+  drawFinderPattern(0, moduleCount - 7);
+  drawFinderPattern(moduleCount - 7, 0);
+
+  // Timing patterns
+  for (let i = 8; i < moduleCount - 8; i++) {
+    modules[6][i] = modules[i][6] = i % 2 === 0;
+  }
+
+  // Dark module
+  modules[moduleCount - 8][8] = true;
+
+  // Reserve format info areas
+  for (let i = 0; i < 9; i++) {
+    if (modules[8][i] === null) modules[8][i] = false;
+    if (modules[i][8] === null) modules[i][8] = false;
+    if (i < 8) {
+      if (modules[8][moduleCount - 1 - i] === null) modules[8][moduleCount - 1 - i] = false;
+      if (modules[moduleCount - 1 - i][8] === null) modules[moduleCount - 1 - i][8] = false;
+    }
+  }
+
+  // Alignment patterns for version 2+
+  if (version >= 2) {
+    const positions = ALIGNMENT[version - 1];
+    for (const row of positions) {
+      for (const col of positions) {
+        if (modules[row][col] !== null) continue;
+        for (let r = -2; r <= 2; r++) {
+          for (let c = -2; c <= 2; c++) {
+            modules[row + r][col + c] = Math.abs(r) === 2 || Math.abs(c) === 2 || (r === 0 && c === 0);
+          }
+        }
+      }
+    }
+  }
+
+  // Encode data (byte mode)
+  let bits = '0100'; // Byte mode indicator
+  const charCountBits = version < 10 ? 8 : 16;
+  bits += text.length.toString(2).padStart(charCountBits, '0');
+  for (let i = 0; i < text.length; i++) {
+    bits += text.charCodeAt(i).toString(2).padStart(8, '0');
+  }
+
+  // Add terminator and pad
+  const totalBits = (CAPACITY[ecLevel][version - 1] + EC_CODEWORDS[ecLevel][version - 1]) * 8;
+  bits += '0000'.slice(0, Math.min(4, totalBits - bits.length));
+  while (bits.length % 8 !== 0) bits += '0';
+  while (bits.length < totalBits) bits += bits.length % 16 === 0 ? '11101100' : '00010001';
+
+  // Place data modules (simplified)
+  let bitIndex = 0;
+  let upward = true;
+  for (let col = moduleCount - 1; col >= 0; col -= 2) {
+    if (col === 6) col = 5; // Skip timing pattern column
+    const rows = upward ? [...Array(moduleCount).keys()].reverse() : [...Array(moduleCount).keys()];
+    for (const row of rows) {
+      for (let c = 0; c < 2; c++) {
+        const cc = col - c;
+        if (modules[row][cc] === null) {
+          modules[row][cc] = bitIndex < bits.length ? bits[bitIndex++] === '1' : false;
+        }
+      }
+    }
+    upward = !upward;
+  }
+
+  // Apply mask pattern 0 (checkerboard)
+  for (let row = 0; row < moduleCount; row++) {
+    for (let col = 0; col < moduleCount; col++) {
+      if (modules[row][col] !== null && (row + col) % 2 === 0) {
+        // Only flip data modules (skip function patterns)
+        const isFunctionPattern =
+          (row < 9 && col < 9) || // Top-left finder + format
+          (row < 9 && col >= moduleCount - 8) || // Top-right finder
+          (row >= moduleCount - 8 && col < 9) || // Bottom-left finder
+          row === 6 || col === 6; // Timing patterns
+        if (!isFunctionPattern) {
+          modules[row][col] = !modules[row][col];
+        }
+      }
+    }
+  }
+
+  // Create canvas
+  const canvas = document.createElement('canvas');
+  const padding = 4;
+  const cellSize = Math.floor(size / (moduleCount + padding * 2));
+  canvas.width = canvas.height = (moduleCount + padding * 2) * cellSize;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = '#000000';
+  for (let row = 0; row < moduleCount; row++) {
+    for (let col = 0; col < moduleCount; col++) {
+      if (modules[row][col]) {
+        ctx.fillRect((col + padding) * cellSize, (row + padding) * cellSize, cellSize, cellSize);
+      }
+    }
+  }
+
+  return canvas.toDataURL();
+};
+
+// Generate a random room ID
+const generateRoomId = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let result = '';
+  for (let i = 0; i < 6; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+};
+
+// WebRTC configuration with free STUN servers
+const RTC_CONFIG = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+  ]
+};
+
+// Parse room ID from URL
+const parseRoomIdFromUrl = () => {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('room');
+};
+
+// Parse signaling data from URL hash
+const parseSignalingFromUrl = () => {
+  const hash = window.location.hash.slice(1);
+  if (!hash) return null;
+  try {
+    return JSON.parse(decodeURIComponent(atob(hash)));
+  } catch {
+    return null;
+  }
+};
 
 const clampPercent = (value, min = 10, max = 100) => {
   if (!Number.isFinite(value)) return null;
@@ -222,7 +414,7 @@ const SlimeSoccer = () => {
   const [score, setScore] = useState({ left: 0, right: 0 });
   const [gameStarted, setGameStarted] = useState(false);
   const [winner, setWinner] = useState(null);
-  const [selectionStep, setSelectionStep] = useState('mode'); // 'mode', 'shape', 'ball', 'duration'
+  const [selectionStep, setSelectionStep] = useState('mode'); // 'mode', 'remoteSetup', 'shape', 'ball', 'duration'
   const [selectedShapes, setSelectedShapes] = useState({ left: null, right: null });
   const [selectedBall, setSelectedBall] = useState(null);
   const [showGoalCelebration, setShowGoalCelebration] = useState(false);
@@ -232,6 +424,17 @@ const SlimeSoccer = () => {
     position: { x: 0, y: 0 },
     visible: false
   });
+
+  // Remote multiplayer state
+  const [roomId, setRoomId] = useState(null);
+  const [isHost, setIsHost] = useState(false);
+  const [remoteConnected, setRemoteConnected] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState('idle'); // 'idle', 'waiting', 'connecting', 'connected', 'failed'
+  const peerConnectionRef = useRef(null);
+  const dataChannelRef = useRef(null);
+  const pendingCandidatesRef = useRef([]);
+
   const resourceBaseUrl = `${process.env.PUBLIC_URL}/resources`;
   const displayHistoryImages =
     (process.env.REACT_APP_DISPLAY_HISTORY_IMAGES ?? process.env.DISPLAY_HISTORY_IMAGES ?? 'TRUE')
@@ -297,7 +500,430 @@ const SlimeSoccer = () => {
     const pool = available.length ? available : AVAILABLE_SHAPES;
     return pool[Math.floor(Math.random() * pool.length)];
   }, []);
-  
+
+  // Generate join URL for remote multiplayer
+  const getJoinUrl = useCallback((roomIdToUse) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('room', roomIdToUse);
+    url.hash = '';
+    return url.toString();
+  }, []);
+
+  // QR code data URL
+  const qrCodeDataUrl = useMemo(() => {
+    if (!roomId) return null;
+    const joinUrl = getJoinUrl(roomId);
+    return generateQRCode(joinUrl, 200);
+  }, [roomId, getJoinUrl]);
+
+  // Clean up WebRTC connection
+  const cleanupConnection = useCallback(() => {
+    if (dataChannelRef.current) {
+      dataChannelRef.current.close();
+      dataChannelRef.current = null;
+    }
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+    pendingCandidatesRef.current = [];
+  }, []);
+
+  // Send data through WebRTC data channel
+  const sendData = useCallback((data) => {
+    if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
+      dataChannelRef.current.send(JSON.stringify(data));
+    }
+  }, []);
+
+  // Handle incoming data from peer
+  const handlePeerData = useCallback((event) => {
+    try {
+      const data = JSON.parse(event.data);
+
+      if (data.type === 'gameState') {
+        // Sync game state from host
+        const state = gameStateRef.current;
+        if (!isHost) {
+          // Guest receives state from host
+          state.leftSlime.x = data.leftSlime.x;
+          state.leftSlime.y = data.leftSlime.y;
+          state.leftSlime.vx = data.leftSlime.vx;
+          state.leftSlime.vy = data.leftSlime.vy;
+          state.leftSlime.isGrabbing = data.leftSlime.isGrabbing;
+          state.leftSlime.hasBall = data.leftSlime.hasBall;
+          state.leftSlime.goalLineTime = data.leftSlime.goalLineTime;
+
+          state.ball.x = data.ball.x;
+          state.ball.y = data.ball.y;
+          state.ball.vx = data.ball.vx;
+          state.ball.vy = data.ball.vy;
+          state.ball.grabbedBy = data.ball.grabbedBy;
+          state.ball.grabAngle = data.ball.grabAngle;
+          state.ball.grabAngularVelocity = data.ball.grabAngularVelocity;
+        }
+      } else if (data.type === 'input') {
+        // Receive input from peer
+        if (isHost) {
+          // Host receives guest (right player) input
+          keysRef.current['arrowleft'] = data.left;
+          keysRef.current['arrowright'] = data.right;
+          keysRef.current['arrowup'] = data.up;
+          keysRef.current['arrowdown'] = data.down;
+        } else {
+          // Guest receives host (left player) input
+          keysRef.current['a'] = data.left;
+          keysRef.current['d'] = data.right;
+          keysRef.current['w'] = data.up;
+          keysRef.current['s'] = data.down;
+        }
+      } else if (data.type === 'score') {
+        setScore(data.score);
+      } else if (data.type === 'timeLeft') {
+        setTimeLeft(data.timeLeft);
+      } else if (data.type === 'gameStart') {
+        setSelectedShapes(data.selectedShapes);
+        setSelectedBall(data.selectedBall);
+        setGameMode(data.gameMode);
+        setTimeLeft(data.timeLeft);
+        setGameStarted(true);
+      } else if (data.type === 'gameEnd') {
+        setWinner(data.winner);
+        setGameStarted(false);
+      } else if (data.type === 'hostState') {
+        // Guest receives full state sync including right player position
+        const state = gameStateRef.current;
+        state.rightSlime.x = data.rightSlime.x;
+        state.rightSlime.y = data.rightSlime.y;
+        state.rightSlime.vx = data.rightSlime.vx;
+        state.rightSlime.vy = data.rightSlime.vy;
+        state.rightSlime.isGrabbing = data.rightSlime.isGrabbing;
+        state.rightSlime.hasBall = data.rightSlime.hasBall;
+        state.rightSlime.goalLineTime = data.rightSlime.goalLineTime;
+
+        state.leftSlime.x = data.leftSlime.x;
+        state.leftSlime.y = data.leftSlime.y;
+        state.leftSlime.vx = data.leftSlime.vx;
+        state.leftSlime.vy = data.leftSlime.vy;
+        state.leftSlime.isGrabbing = data.leftSlime.isGrabbing;
+        state.leftSlime.hasBall = data.leftSlime.hasBall;
+        state.leftSlime.goalLineTime = data.leftSlime.goalLineTime;
+
+        state.ball.x = data.ball.x;
+        state.ball.y = data.ball.y;
+        state.ball.vx = data.ball.vx;
+        state.ball.vy = data.ball.vy;
+        state.ball.grabbedBy = data.ball.grabbedBy;
+        state.ball.grabAngle = data.ball.grabAngle;
+        state.ball.grabAngularVelocity = data.ball.grabAngularVelocity;
+      }
+    } catch (e) {
+      console.error('Error parsing peer data:', e);
+    }
+  }, [isHost]);
+
+  // Setup data channel event handlers
+  const setupDataChannel = useCallback((channel) => {
+    channel.onopen = () => {
+      setConnectionStatus('connected');
+      setRemoteConnected(true);
+    };
+    channel.onclose = () => {
+      setRemoteConnected(false);
+      setConnectionStatus('idle');
+    };
+    channel.onerror = (error) => {
+      console.error('Data channel error:', error);
+      setConnectionStatus('failed');
+    };
+    channel.onmessage = handlePeerData;
+    dataChannelRef.current = channel;
+  }, [handlePeerData]);
+
+  // Create WebRTC offer (host)
+  const createOffer = useCallback(async () => {
+    try {
+      cleanupConnection();
+      const pc = new RTCPeerConnection(RTC_CONFIG);
+      peerConnectionRef.current = pc;
+
+      const channel = pc.createDataChannel('game', { ordered: false });
+      setupDataChannel(channel);
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          pendingCandidatesRef.current.push(event.candidate);
+        }
+      };
+
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'failed') {
+          setConnectionStatus('failed');
+        }
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      // Wait for ICE gathering to complete
+      await new Promise((resolve) => {
+        if (pc.iceGatheringState === 'complete') {
+          resolve();
+        } else {
+          pc.onicegatheringstatechange = () => {
+            if (pc.iceGatheringState === 'complete') resolve();
+          };
+          // Timeout after 5 seconds
+          setTimeout(resolve, 5000);
+        }
+      });
+
+      return pc.localDescription;
+    } catch (error) {
+      console.error('Error creating offer:', error);
+      setConnectionStatus('failed');
+      return null;
+    }
+  }, [cleanupConnection, setupDataChannel]);
+
+  // Handle WebRTC answer (host)
+  const handleAnswer = useCallback(async (answer) => {
+    try {
+      const pc = peerConnectionRef.current;
+      if (!pc) return;
+
+      await pc.setRemoteDescription(new RTCSessionDescription(answer));
+    } catch (error) {
+      console.error('Error handling answer:', error);
+      setConnectionStatus('failed');
+    }
+  }, []);
+
+  // Create WebRTC answer (guest)
+  const createAnswer = useCallback(async (offer) => {
+    try {
+      cleanupConnection();
+      const pc = new RTCPeerConnection(RTC_CONFIG);
+      peerConnectionRef.current = pc;
+
+      pc.ondatachannel = (event) => {
+        setupDataChannel(event.channel);
+      };
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          pendingCandidatesRef.current.push(event.candidate);
+        }
+      };
+
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'failed') {
+          setConnectionStatus('failed');
+        }
+      };
+
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      // Wait for ICE gathering
+      await new Promise((resolve) => {
+        if (pc.iceGatheringState === 'complete') {
+          resolve();
+        } else {
+          pc.onicegatheringstatechange = () => {
+            if (pc.iceGatheringState === 'complete') resolve();
+          };
+          setTimeout(resolve, 5000);
+        }
+      });
+
+      return pc.localDescription;
+    } catch (error) {
+      console.error('Error creating answer:', error);
+      setConnectionStatus('failed');
+      return null;
+    }
+  }, [cleanupConnection, setupDataChannel]);
+
+  // Start hosting a remote game
+  const startHosting = useCallback(async () => {
+    const newRoomId = generateRoomId();
+    setRoomId(newRoomId);
+    setIsHost(true);
+    setConnectionStatus('waiting');
+    setPlayerMode('remote');
+    setSelectionStep('remoteSetup');
+
+    // Store offer in localStorage for signaling (simple approach)
+    const offer = await createOffer();
+    if (offer) {
+      localStorage.setItem(`game_offer_${newRoomId}`, JSON.stringify(offer));
+
+      // Poll for answer
+      const pollForAnswer = setInterval(async () => {
+        const answerStr = localStorage.getItem(`game_answer_${newRoomId}`);
+        if (answerStr) {
+          clearInterval(pollForAnswer);
+          const answer = JSON.parse(answerStr);
+          await handleAnswer(answer);
+          localStorage.removeItem(`game_answer_${newRoomId}`);
+        }
+      }, 1000);
+
+      // Store interval ID for cleanup
+      const originalCleanup = cleanupConnection;
+      return () => {
+        clearInterval(pollForAnswer);
+        originalCleanup();
+      };
+    }
+  }, [createOffer, handleAnswer, cleanupConnection]);
+
+  // Join a remote game
+  const joinGame = useCallback(async (roomIdToJoin) => {
+    setRoomId(roomIdToJoin);
+    setIsHost(false);
+    setConnectionStatus('connecting');
+    setPlayerMode('remote');
+
+    // Poll for offer from host
+    const pollForOffer = setInterval(async () => {
+      const offerStr = localStorage.getItem(`game_offer_${roomIdToJoin}`);
+      if (offerStr) {
+        clearInterval(pollForOffer);
+        const offer = JSON.parse(offerStr);
+        const answer = await createAnswer(offer);
+        if (answer) {
+          localStorage.setItem(`game_answer_${roomIdToJoin}`, JSON.stringify(answer));
+        }
+      }
+    }, 1000);
+
+    // Timeout after 30 seconds
+    setTimeout(() => {
+      clearInterval(pollForOffer);
+      if (connectionStatus === 'connecting') {
+        setConnectionStatus('failed');
+      }
+    }, 30000);
+  }, [createAnswer, connectionStatus]);
+
+  // Copy link to clipboard
+  const copyLinkToClipboard = useCallback(() => {
+    if (!roomId) return;
+    const joinUrl = getJoinUrl(roomId);
+    navigator.clipboard.writeText(joinUrl).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    }).catch(console.error);
+  }, [roomId, getJoinUrl]);
+
+  // Check for room ID in URL on mount
+  useEffect(() => {
+    const urlRoomId = parseRoomIdFromUrl();
+    if (urlRoomId) {
+      joinGame(urlRoomId);
+      setSelectionStep('remoteSetup');
+    }
+  }, []);
+
+  // Sync game state over network (host sends state to guest)
+  useEffect(() => {
+    if (!gameStarted || !remoteConnected || !isHost) return;
+
+    const syncInterval = setInterval(() => {
+      const state = gameStateRef.current;
+      sendData({
+        type: 'hostState',
+        leftSlime: {
+          x: state.leftSlime.x,
+          y: state.leftSlime.y,
+          vx: state.leftSlime.vx,
+          vy: state.leftSlime.vy,
+          isGrabbing: state.leftSlime.isGrabbing,
+          hasBall: state.leftSlime.hasBall,
+          goalLineTime: state.leftSlime.goalLineTime,
+        },
+        rightSlime: {
+          x: state.rightSlime.x,
+          y: state.rightSlime.y,
+          vx: state.rightSlime.vx,
+          vy: state.rightSlime.vy,
+          isGrabbing: state.rightSlime.isGrabbing,
+          hasBall: state.rightSlime.hasBall,
+          goalLineTime: state.rightSlime.goalLineTime,
+        },
+        ball: {
+          x: state.ball.x,
+          y: state.ball.y,
+          vx: state.ball.vx,
+          vy: state.ball.vy,
+          grabbedBy: state.ball.grabbedBy,
+          grabAngle: state.ball.grabAngle,
+          grabAngularVelocity: state.ball.grabAngularVelocity,
+        },
+      });
+    }, 1000 / 30); // 30 times per second
+
+    return () => clearInterval(syncInterval);
+  }, [gameStarted, remoteConnected, isHost, sendData]);
+
+  // Send local input to peer
+  useEffect(() => {
+    if (!gameStarted || !remoteConnected) return;
+
+    const inputInterval = setInterval(() => {
+      const keys = keysRef.current;
+      if (isHost) {
+        // Host sends left player (WASD) input
+        sendData({
+          type: 'input',
+          left: keys['a'] || false,
+          right: keys['d'] || false,
+          up: keys['w'] || false,
+          down: keys['s'] || false,
+        });
+      } else {
+        // Guest sends right player (arrow) input
+        sendData({
+          type: 'input',
+          left: keys['arrowleft'] || false,
+          right: keys['arrowright'] || false,
+          up: keys['arrowup'] || false,
+          down: keys['arrowdown'] || false,
+        });
+      }
+    }, 1000 / 60); // 60 times per second
+
+    return () => clearInterval(inputInterval);
+  }, [gameStarted, remoteConnected, isHost, sendData]);
+
+  // Sync score changes
+  useEffect(() => {
+    if (remoteConnected && isHost) {
+      sendData({ type: 'score', score });
+    }
+  }, [score, remoteConnected, isHost, sendData]);
+
+  // Sync time changes
+  useEffect(() => {
+    if (remoteConnected && isHost) {
+      sendData({ type: 'timeLeft', timeLeft });
+    }
+  }, [timeLeft, remoteConnected, isHost, sendData]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      cleanupConnection();
+      if (roomId) {
+        localStorage.removeItem(`game_offer_${roomId}`);
+        localStorage.removeItem(`game_answer_${roomId}`);
+      }
+    };
+  }, [cleanupConnection, roomId]);
+
   // Load background images
   useEffect(() => {
     // Create canvas background with cannabis and diamonds
@@ -607,12 +1233,19 @@ const SlimeSoccer = () => {
   }, [gameStarted, timeLeft]);
 
   const determineWinner = () => {
+    let winnerResult;
     if (score.left > score.right) {
-      setWinner(t('cyanTeam'));
+      winnerResult = t('cyanTeam');
     } else if (score.right > score.left) {
-      setWinner(t('redTeam'));
+      winnerResult = t('redTeam');
     } else {
-      setWinner('Draw');
+      winnerResult = 'Draw';
+    }
+    setWinner(winnerResult);
+
+    // Notify remote peer about game end
+    if (playerMode === 'remote' && remoteConnected && isHost) {
+      sendData({ type: 'gameEnd', winner: winnerResult });
     }
   };
 
@@ -662,7 +1295,7 @@ const SlimeSoccer = () => {
       '8min': 480,
       'worldcup': 300
     };
-    
+
     if (startGameTimeoutRef.current) {
       clearTimeout(startGameTimeoutRef.current);
       startGameTimeoutRef.current = null;
@@ -673,6 +1306,16 @@ const SlimeSoccer = () => {
     setGameStarted(false);
     startGameTimeoutRef.current = setTimeout(() => {
       setGameStarted(true);
+      // Notify remote peer about game start
+      if (playerMode === 'remote' && remoteConnected && isHost) {
+        sendData({
+          type: 'gameStart',
+          selectedShapes,
+          selectedBall,
+          gameMode: mode,
+          timeLeft: times[mode],
+        });
+      }
     }, 2000);
   };
 
@@ -907,8 +1550,14 @@ const SlimeSoccer = () => {
     const keys = keysRef.current;
     const now = Date.now();
     let shouldAutoApproach = false;
-    
-    if (playerMode === 'multi') {
+
+    // In remote mode, guest doesn't run physics (receives state from host)
+    if (playerMode === 'remote' && !isHost) {
+      // Guest only draws, doesn't update physics
+      return;
+    }
+
+    if (playerMode === 'multi' || playerMode === 'remote') {
       if (keys['a']) state.leftSlime.vx = -SLIME_SPEED;
       else if (keys['d']) state.leftSlime.vx = SLIME_SPEED;
       else state.leftSlime.vx = 0;
@@ -971,7 +1620,7 @@ const SlimeSoccer = () => {
       updateAI();
     }
 
-    if (playerMode === 'multi' && shouldAutoApproach) {
+    if ((playerMode === 'multi' || playerMode === 'remote') && shouldAutoApproach) {
       const distanceToLeft = state.leftSlime.x - state.rightSlime.x;
       if (Math.abs(distanceToLeft) > 5) {
         state.rightSlime.vx =
@@ -1163,6 +1812,7 @@ const SlimeSoccer = () => {
     GOAL_HEIGHT,
     GOAL_WIDTH,
     SLIME_RADIUS,
+    isHost,
     playerMode,
     triggerGoalCelebration,
     updateAI,
@@ -1711,30 +2361,153 @@ const SlimeSoccer = () => {
             <p className="mb-2 text-gray-300 text-lg">{t('originalAuthor')}</p>
             <p className="mb-8 text-gray-400 italic">{t('adaptedBy')}</p>
             
-            <div className="flex gap-4 mb-8 justify-center">
+            <div className="flex flex-col gap-4 mb-8 items-center">
+              <div className="flex gap-4 justify-center">
+                <button
+                  onClick={() => {
+                    setPlayerMode('single');
+                    setSelectionStep('shape');
+                  }}
+                  className={`px-8 py-4 rounded text-lg transition-all ${lightButtonClasses}`}
+                >
+                  {t('singlePlayer')}
+                </button>
+                <button
+                  onClick={() => {
+                    setPlayerMode('multi');
+                    setSelectionStep('shape');
+                  }}
+                  className={`px-8 py-4 rounded text-lg transition-all ${lightButtonClasses}`}
+                >
+                  {t('multiplayer')}
+                </button>
+              </div>
               <button
-                onClick={() => {
-                  setPlayerMode('single');
-                  setSelectionStep('shape');
-                }}
+                onClick={startHosting}
                 className={`px-8 py-4 rounded text-lg transition-all ${lightButtonClasses}`}
               >
-                {t('singlePlayer')}
-              </button>
-              <button
-                onClick={() => {
-                  setPlayerMode('multi');
-                  setSelectionStep('shape');
-                }}
-                className={`px-8 py-4 rounded text-lg transition-all ${lightButtonClasses}`}
-              >
-                {t('multiplayer')}
+                {t('remoteMultiplayer')}
               </button>
             </div>
           </div>
         </div>
       )}
-      
+
+      {selectionStep === 'remoteSetup' && (
+        <div className="text-center">
+          <h2 className="text-3xl font-bold mb-6 text-green-400">
+            {t('remoteMultiplayer')}
+          </h2>
+
+          {isHost ? (
+            <div className="flex flex-col items-center gap-4">
+              <p className="text-gray-300 text-lg mb-2">
+                {remoteConnected ? t('connected') : t('waitingForPlayer')}
+              </p>
+
+              {!remoteConnected && (
+                <>
+                  <p className="text-gray-400">{t('scanQRCode')}</p>
+
+                  {qrCodeDataUrl && (
+                    <div className="bg-white p-4 rounded-lg shadow-lg">
+                      <img
+                        src={qrCodeDataUrl}
+                        alt="QR Code"
+                        className="w-48 h-48"
+                      />
+                    </div>
+                  )}
+
+                  <p className="text-gray-400 mt-4">{t('orShareLink')}</p>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={roomId ? getJoinUrl(roomId) : ''}
+                      className="px-3 py-2 rounded bg-green-800 text-white text-sm w-64 truncate"
+                      onClick={(e) => e.target.select()}
+                    />
+                    <button
+                      onClick={copyLinkToClipboard}
+                      className={`px-4 py-2 rounded ${lightButtonClasses}`}
+                    >
+                      {linkCopied ? t('linkCopied') : t('copyLink')}
+                    </button>
+                  </div>
+
+                  {connectionStatus === 'waiting' && (
+                    <div className="flex items-center gap-2 mt-4">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-green-400"></div>
+                      <span className="text-gray-400">{t('waitingForPlayer')}</span>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {remoteConnected && (
+                <div className="flex flex-col items-center gap-4">
+                  <p className="text-green-400 text-lg">{t('youAreHost')}</p>
+                  <button
+                    onClick={() => setSelectionStep('shape')}
+                    className={`px-8 py-4 rounded text-lg transition-all ${lightButtonClasses}`}
+                  >
+                    {t('nextButton')}
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-4">
+              {connectionStatus === 'connecting' && (
+                <div className="flex flex-col items-center gap-4">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-400"></div>
+                  <p className="text-gray-300">{t('connecting')}</p>
+                </div>
+              )}
+
+              {connectionStatus === 'connected' && (
+                <div className="flex flex-col items-center gap-4">
+                  <p className="text-green-400 text-xl">{t('connected')}</p>
+                  <p className="text-gray-300">{t('youAreGuest')}</p>
+                  <p className="text-gray-400 text-sm">{t('waitingForPlayer')}</p>
+                </div>
+              )}
+
+              {connectionStatus === 'failed' && (
+                <div className="flex flex-col items-center gap-4">
+                  <p className="text-red-400">{t('connectionFailed')}</p>
+                  <button
+                    onClick={() => {
+                      setSelectionStep('mode');
+                      setConnectionStatus('idle');
+                      cleanupConnection();
+                    }}
+                    className={`px-6 py-3 rounded ${lightButtonClasses}`}
+                  >
+                    {t('backButton')}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          <button
+            onClick={() => {
+              setSelectionStep('mode');
+              setPlayerMode(null);
+              setConnectionStatus('idle');
+              setRoomId(null);
+              cleanupConnection();
+            }}
+            className={`mt-8 px-6 py-3 rounded ${lightButtonClasses}`}
+          >
+            {t('backButton')}
+          </button>
+        </div>
+      )}
+
       {selectionStep === 'shape' && (
         <div className="text-center">
           <h2 className="text-3xl font-bold mb-6 text-green-400">{t('selectShape')}</h2>
