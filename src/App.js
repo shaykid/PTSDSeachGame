@@ -51,8 +51,6 @@ const findMatchingLocale = (locale) => {
 const locale = 'he-IL';
 const t = (key) => TRANSLATIONS['he-IL']?.[key] || TRANSLATIONS['he-IL'][key] || key;
 
-const GAME_WIDTH = 800;
-const GAME_HEIGHT = 400;
 const GROUND_HEIGHT = 80;
 const SLIME_RADIUS = 40;
 const BALL_RADIUS = 10;
@@ -97,6 +95,24 @@ const SlimeSoccer = () => {
   const [selectedBall, setSelectedBall] = useState(null);
   const [showGoalCelebration, setShowGoalCelebration] = useState(false);
   const resourceBaseUrl = `${process.env.PUBLIC_URL}/resources`;
+  const [gameDimensions, setGameDimensions] = useState(() => ({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  }));
+  const GAME_WIDTH = gameDimensions.width;
+  const GAME_HEIGHT = gameDimensions.height;
+
+  useEffect(() => {
+    const handleResize = () => {
+      setGameDimensions({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const pickRandomShape = useCallback((excludeShape) => {
     const available = AVAILABLE_SHAPES.filter((shape) => shape !== excludeShape);
@@ -124,7 +140,7 @@ const SlimeSoccer = () => {
     logoImg.onload = () => {
       logoImageRef.current = logoImg;
     };
-  }, []);
+  }, [GAME_HEIGHT, GAME_WIDTH, resourceBaseUrl]);
 
   useEffect(() => {
     goalAudioRef.current = new Audio(`${resourceBaseUrl}/goal.mp3`);
@@ -565,7 +581,7 @@ const SlimeSoccer = () => {
       ai.vy = SLIME_JUMP_POWER;
     }
     
-  }, [playerMode, timeLeft, gameMode]);
+  }, [GAME_HEIGHT, GAME_WIDTH, playerMode, timeLeft, gameMode]);
 
   const updatePhysics = useCallback(() => {
     const state = gameStateRef.current;
@@ -772,7 +788,7 @@ const SlimeSoccer = () => {
         }
       }
     });
-  }, [playerMode, triggerGoalCelebration, updateAI]);
+  }, [GAME_HEIGHT, GAME_WIDTH, playerMode, triggerGoalCelebration, updateAI]);
 
   const drawHelmet = (ctx, x, y, radius, type) => {
     ctx.save();
@@ -1200,7 +1216,7 @@ const SlimeSoccer = () => {
     // Draw ball
     const ballType = selectedBall || 'cannabis';
     drawBall(ctx, state.ball.x, state.ball.y, BALL_RADIUS, ballType);
-  }, [selectedShapes, selectedBall]);
+  }, [GAME_HEIGHT, GAME_WIDTH, selectedShapes, selectedBall]);
 
   const gameLoop = useCallback((currentTime) => {
     if (gameStarted) {
@@ -1233,14 +1249,15 @@ const SlimeSoccer = () => {
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
+  const lightButtonClasses = 'bg-green-200 hover:bg-green-300 text-green-900 border-2 border-green-300';
 
   const ShapeButton = ({ shape, label, onClick, selected }) => (
     <button
       onClick={onClick}
       className={`px-6 py-4 rounded border-2 transition-all ${
         selected 
-          ? 'bg-green-600 border-green-400 scale-105' 
-          : 'bg-gray-700 border-gray-500 hover:bg-gray-600'
+          ? 'bg-green-300 border-green-400 scale-105' 
+          : 'bg-green-200 border-green-300 hover:bg-green-300'
       }`}
     >
       {label}
@@ -1248,7 +1265,7 @@ const SlimeSoccer = () => {
   );
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-green-700 text-gray-900 p-4" dir="rtl">
+    <div className="flex flex-col items-center justify-center min-h-screen w-screen bg-green-700 text-gray-900 p-4" dir="rtl">
       {selectionStep === 'mode' && (
         <div className="text-center">
           <h1 className="text-5xl font-bold mb-6 text-green-300" style={{fontFamily: 'Arial, sans-serif'}}>
@@ -1264,7 +1281,7 @@ const SlimeSoccer = () => {
                 setPlayerMode('single');
                 setSelectionStep('shape');
               }}
-              className="px-8 py-4 bg-green-700 hover:bg-green-600 rounded border-2 border-green-500 text-lg transition-all"
+              className={`px-8 py-4 rounded text-lg transition-all ${lightButtonClasses}`}
             >
               {t('singlePlayer')}
             </button>
@@ -1273,7 +1290,7 @@ const SlimeSoccer = () => {
                 setPlayerMode('multi');
                 setSelectionStep('shape');
               }}
-              className="px-8 py-4 bg-green-700 hover:bg-green-600 rounded border-2 border-green-500 text-lg transition-all"
+              className={`px-8 py-4 rounded text-lg transition-all ${lightButtonClasses}`}
             >
               {t('multiplayer')}
             </button>
@@ -1395,7 +1412,7 @@ const SlimeSoccer = () => {
                 setSelectionStep('mode');
                 setSelectedShapes({ left: null, right: null });
               }}
-              className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded"
+              className={`px-6 py-3 rounded ${lightButtonClasses}`}
             >
               {t('backButton')}
             </button>
@@ -1411,7 +1428,7 @@ const SlimeSoccer = () => {
                   }
                   setSelectionStep('ball');
                 }}
-                className="px-6 py-3 bg-green-600 hover:bg-green-500 rounded"
+                className={`px-6 py-3 rounded ${lightButtonClasses}`}
               >
                 {t('nextButton')}
               </button>
@@ -1451,14 +1468,14 @@ const SlimeSoccer = () => {
                 setSelectionStep('shape');
                 setSelectedBall(null);
               }}
-              className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded"
+              className={`px-6 py-3 rounded ${lightButtonClasses}`}
             >
               {t('backButton')}
             </button>
             {selectedBall && (
               <button
                 onClick={() => setSelectionStep('duration')}
-                className="px-6 py-3 bg-green-600 hover:bg-green-500 rounded"
+                className={`px-6 py-3 rounded ${lightButtonClasses}`}
               >
                 {t('nextButton')}
               </button>
@@ -1480,31 +1497,31 @@ const SlimeSoccer = () => {
           <div className="flex gap-4 mb-8 flex-wrap justify-center">
             <button
               onClick={() => startGame('1min')}
-              className="px-6 py-3 bg-green-700 hover:bg-green-600 rounded border-2 border-green-500"
+              className={`px-6 py-3 rounded ${lightButtonClasses}`}
             >
               {t('oneMinute')}
             </button>
             <button
               onClick={() => startGame('2min')}
-              className="px-6 py-3 bg-green-700 hover:bg-green-600 rounded border-2 border-green-500"
+              className={`px-6 py-3 rounded ${lightButtonClasses}`}
             >
               {t('twoMinutes')}
             </button>
             <button
               onClick={() => startGame('4min')}
-              className="px-6 py-3 bg-green-700 hover:bg-green-600 rounded border-2 border-green-500"
+              className={`px-6 py-3 rounded ${lightButtonClasses}`}
             >
               {t('fourMinutes')}
             </button>
             <button
               onClick={() => startGame('8min')}
-              className="px-6 py-3 bg-green-700 hover:bg-green-600 rounded border-2 border-green-500"
+              className={`px-6 py-3 rounded ${lightButtonClasses}`}
             >
               {t('eightMinutes')}
             </button>
             <button
               onClick={() => startGame('worldcup')}
-              className="px-6 py-3 bg-green-700 hover:bg-green-600 rounded border-2 border-green-500"
+              className={`px-6 py-3 rounded ${lightButtonClasses}`}
             >
               {t('worldCup')}
             </button>
@@ -1529,7 +1546,7 @@ const SlimeSoccer = () => {
               setSelectionStep('ball');
               setGameMode(null);
             }}
-            className="mt-4 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm"
+            className={`mt-4 px-4 py-2 rounded text-sm ${lightButtonClasses}`}
           >
             {t('backButton')}
           </button>
@@ -1537,8 +1554,8 @@ const SlimeSoccer = () => {
       )}
       
       {(gameStarted || winner) && (
-        <div className="flex flex-col items-center relative">
-          <div className="bg-green-800 px-8 py-4 rounded-t-lg w-full flex justify-between items-center">
+        <div className="fixed inset-0 flex flex-col items-center justify-start bg-green-700">
+          <div className="absolute top-0 left-0 right-0 bg-green-800 px-8 py-4 w-full flex justify-between items-center z-10">
             <span className="text-xl font-bold">{t('cyanTeam')}: {score.left}</span>
             <span className="text-2xl font-mono">{formatTime(timeLeft)}</span>
             <span className="text-xl font-bold">{score.right} : {t('redTeam')}</span>
@@ -1548,7 +1565,7 @@ const SlimeSoccer = () => {
             ref={canvasRef}
             width={GAME_WIDTH}
             height={GAME_HEIGHT}
-            className="border-4 border-green-700"
+            className="border-4 border-green-700 w-full h-full"
           />
 
           {showGoalCelebration && (
@@ -1568,7 +1585,7 @@ const SlimeSoccer = () => {
           )}
           
           {winner && (
-            <div className="mt-8 text-center">
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-20">
               <h2 className="text-3xl font-bold mb-4 text-green-400">
                 {winner === 'Draw' ? t('gameDraw') : `${winner} ${t('gameWinner')}`}
               </h2>
@@ -1581,7 +1598,7 @@ const SlimeSoccer = () => {
                   setSelectedShapes({ left: null, right: null });
                   setSelectedBall(null);
                 }}
-                className="px-6 py-3 bg-green-600 hover:bg-green-500 rounded"
+                className={`px-6 py-3 rounded ${lightButtonClasses}`}
               >
                 {t('backToMenu')}
               </button>

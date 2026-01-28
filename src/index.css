@@ -14,6 +14,11 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+html, body, #root {
+  height: 100%;
+  width: 100%;
+}
+
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
@@ -30,14 +35,11 @@ canvas {
 
 .goal-celebration-text {
   font-family: 'Solitreo', cursive;
-  animation: goal-text-run 1s linear;
+  animation: goal-text-run 3s linear;
 }
 
 @keyframes goal-text-run {
   0% {
-    transform: translateX(-35vw);
-  }
-  50% {
     transform: translateX(35vw);
   }
   100% {
