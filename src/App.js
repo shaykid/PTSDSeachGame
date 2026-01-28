@@ -1043,11 +1043,11 @@ const SlimeSoccer = () => {
     
     // Draw Seach logo in background
     if (logoImageRef.current) {
-      ctx.globalAlpha = 0.15;
-      const logoSize = 350;
+      ctx.globalAlpha = 0.55;
+      const logoSize = 250;
       ctx.drawImage(
         logoImageRef.current,
-        GAME_WIDTH / 2 - logoSize / 2,
+        GAME_WIDTH / 1.3 - logoSize / 2,
         GAME_HEIGHT / 2 - logoSize / 2,
         logoSize,
         logoSize
