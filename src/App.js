@@ -63,6 +63,36 @@ const BALL_BOUNCE_DAMPING = 0.8;
 const MAX_BALL_SPEED = 13;
 const AI_REACTION_DISTANCE = 300;
 const AI_PREDICTION_TIME = 30;
+const HISTORY_IMAGE_FILES = [
+  '0bb921c5-b38c-4aa1-bed0-678ab0d8fa08.jpeg',
+  '0f9a6eb6-b7ce-48b4-a477-5eaf7ee7dd15.jpeg',
+  '138a7842-ba10-4fad-a3e5-641908465ea1.jpeg',
+  '1690d42f-3598-464a-b673-ece65732e8ff.jpeg',
+  '23aefebb-b848-48f0-a7b8-d8c7624e01d2.jpeg',
+  '2ab838e0-79b6-4d2a-a34d-7309ab714cb3.jpeg',
+  '2c811700-56df-4401-b5d3-889fd1eb6f68.jpeg',
+  '448b1427-4284-44d9-8f65-503ac3f54856.jpeg',
+  '4c748c76-d377-491d-a799-deeb3c32b986.jpeg',
+  '7dfb5155-9971-4c05-8b38-4c14c74f0606.jpeg',
+  '7e701eb4-c8c9-454e-a23b-09d4040c22f6.jpeg',
+  '868b831a-3e34-404f-9400-c61fd558cced.jpeg',
+  '99e1d415-8c12-4c99-a3a3-b78a71089f34.jpeg',
+  '9c7aaf1a-1f9e-4951-b220-2bd016dcd81b.jpeg',
+  '9d697cf0-d891-4a55-a877-066bf63fe060.jpeg',
+  'a0805288-611a-46a1-84f3-849948c97018.jpeg',
+  'a2385dc0-ff13-4c9d-a96a-a55cadd45446.jpeg',
+  'a8bfa9f5-98a4-46a3-b6b7-8aa32d232518.jpeg',
+  'abcbf278-e8c8-4ad4-8771-323c5a97ba1e.jpeg',
+  'b74b1f9b-70b1-49d4-b31c-8b859734f142.jpeg',
+  'b7c50973-2c1a-4eb3-b5db-6a269d695693.jpeg',
+  'c3aef9f8-6be2-4fdb-b338-5c6ed2ecaf1e.jpeg',
+  'd64ab708-3b31-4207-ab1f-645db849f74a.jpeg',
+  'e053ddf1-a233-4c86-a110-0376d4c95537.jpeg',
+  'e7ce24c4-b951-4fb3-a0c6-a4c3db9822b5.jpeg',
+  'f0ca2a02-3f11-4027-8f07-32d8349e7d7c.jpeg',
+  'f171321a-15a0-4d87-8347-880e71e19895.jpeg',
+  'fb059a97-f6d8-4f71-89aa-b02a7026c964.jpeg'
+];
 const AVAILABLE_SHAPES = [
   'helmetCamo',
   'helmetDesert',
@@ -96,7 +126,15 @@ const SlimeSoccer = () => {
   const [selectedBall, setSelectedBall] = useState(null);
   const [showGoalCelebration, setShowGoalCelebration] = useState(false);
   const [isTouchDevice, setIsTouchDevice] = useState(false);
+  const [historyOverlay, setHistoryOverlay] = useState({
+    src: '',
+    position: { x: 0, y: 0 },
+    visible: false
+  });
   const resourceBaseUrl = `${process.env.PUBLIC_URL}/resources`;
+  const displayHistoryImages =
+    (process.env.REACT_APP_DISPLAY_HISTORY_IMAGES ?? process.env.DISPLAY_HISTORY_IMAGES ?? 'TRUE')
+      .toUpperCase() !== 'FALSE';
   const [gameDimensions, setGameDimensions] = useState(() => ({
     width: window.innerWidth,
     height: window.innerHeight,
@@ -219,6 +257,63 @@ const SlimeSoccer = () => {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (selectionStep !== 'mode' || !displayHistoryImages) {
+      setHistoryOverlay((prev) => ({ ...prev, visible: false }));
+      return;
+    }
+
+    let cancelled = false;
+    const timeouts = [];
+    const fadeDuration = 1000;
+    const visibleDuration = 2000;
+    const pauseDuration = 2000;
+    const maxOffset = 33.3333;
+
+    const scheduleCycle = () => {
+      if (cancelled) return;
+      const pick = HISTORY_IMAGE_FILES[Math.floor(Math.random() * HISTORY_IMAGE_FILES.length)];
+      const position = {
+        x: Math.random() * maxOffset,
+        y: Math.random() * maxOffset
+      };
+
+      setHistoryOverlay({
+        src: `${resourceBaseUrl}/front-images/${pick}`,
+        position,
+        visible: false
+      });
+
+      timeouts.push(
+        setTimeout(() => {
+          if (cancelled) return;
+          setHistoryOverlay((prev) => ({ ...prev, visible: true }));
+        }, 50)
+      );
+
+      timeouts.push(
+        setTimeout(() => {
+          if (cancelled) return;
+          setHistoryOverlay((prev) => ({ ...prev, visible: false }));
+        }, visibleDuration)
+      );
+
+      timeouts.push(
+        setTimeout(() => {
+          if (cancelled) return;
+          scheduleCycle();
+        }, visibleDuration + fadeDuration + pauseDuration)
+      );
+    };
+
+    scheduleCycle();
+
+    return () => {
+      cancelled = true;
+      timeouts.forEach((timeoutId) => clearTimeout(timeoutId));
+    };
+  }, [displayHistoryImages, resourceBaseUrl, selectionStep]);
 
   const triggerGoalCelebration = useCallback(() => {
     if (goalTimeoutRef.current) {
@@ -1402,33 +1497,48 @@ const SlimeSoccer = () => {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen w-screen bg-green-700 text-gray-900 p-4" dir="rtl">
       {selectionStep === 'mode' && (
-        <div className="text-center">
-          <h1 className="text-5xl font-bold mb-6 text-green-300" style={{fontFamily: 'Arial, sans-serif'}}>
-            {t('mainTitle')}
-          </h1>
-          <h2 className="text-3xl font-bold mb-4 text-green-400">{t('gameTitle')}</h2>
-          <p className="mb-2 text-gray-300 text-lg">{t('originalAuthor')}</p>
-          <p className="mb-8 text-gray-400 italic">{t('adaptedBy')}</p>
-          
-          <div className="flex gap-4 mb-8 justify-center">
-            <button
-              onClick={() => {
-                setPlayerMode('single');
-                setSelectionStep('shape');
+        <div className="text-center relative">
+          {displayHistoryImages && historyOverlay.src && (
+            <div
+              className="fixed inset-0 pointer-events-none z-0"
+              style={{
+                backgroundImage: `url(${historyOverlay.src})`,
+                backgroundSize: '150% 150%',
+                backgroundPosition: `${historyOverlay.position.x}% ${historyOverlay.position.y}%`,
+                backgroundRepeat: 'no-repeat',
+                opacity: historyOverlay.visible ? 0.6 : 0,
+                transition: 'opacity 1s ease-in-out'
               }}
-              className={`px-8 py-4 rounded text-lg transition-all ${lightButtonClasses}`}
-            >
-              {t('singlePlayer')}
-            </button>
-            <button
-              onClick={() => {
-                setPlayerMode('multi');
-                setSelectionStep('shape');
-              }}
-              className={`px-8 py-4 rounded text-lg transition-all ${lightButtonClasses}`}
-            >
-              {t('multiplayer')}
-            </button>
+            />
+          )}
+          <div className="relative z-10">
+            <h1 className="text-5xl font-bold mb-6 text-green-300" style={{fontFamily: 'Arial, sans-serif'}}>
+              {t('mainTitle')}
+            </h1>
+            <h2 className="text-3xl font-bold mb-4 text-green-400">{t('gameTitle')}</h2>
+            <p className="mb-2 text-gray-300 text-lg">{t('originalAuthor')}</p>
+            <p className="mb-8 text-gray-400 italic">{t('adaptedBy')}</p>
+            
+            <div className="flex gap-4 mb-8 justify-center">
+              <button
+                onClick={() => {
+                  setPlayerMode('single');
+                  setSelectionStep('shape');
+                }}
+                className={`px-8 py-4 rounded text-lg transition-all ${lightButtonClasses}`}
+              >
+                {t('singlePlayer')}
+              </button>
+              <button
+                onClick={() => {
+                  setPlayerMode('multi');
+                  setSelectionStep('shape');
+                }}
+                className={`px-8 py-4 rounded text-lg transition-all ${lightButtonClasses}`}
+              >
+                {t('multiplayer')}
+              </button>
+            </div>
           </div>
         </div>
       )}
