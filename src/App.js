@@ -1070,6 +1070,12 @@ const SlimeSoccer = () => {
       state.ball.vx *= BALL_DAMPING;
       state.ball.x += state.ball.vx;
       state.ball.y += state.ball.vy;
+
+      // Random horizontal shift while falling (±10-40 pixels, ~3% chance per frame)
+      if (state.ball.vy > 0 && Math.random() < 0.03) {
+        const shiftAmount = (10 + Math.random() * 30) * (Math.random() < 0.5 ? -1 : 1);
+        state.ball.x += shiftAmount;
+      }
     }
     
     if (state.ball.x < BALL_RADIUS) {
