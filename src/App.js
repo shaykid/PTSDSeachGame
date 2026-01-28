@@ -52,10 +52,9 @@ const locale = 'he-IL';
 const t = (key) => TRANSLATIONS['he-IL']?.[key] || TRANSLATIONS['he-IL'][key] || key;
 
 const GROUND_HEIGHT = 80;
-const SLIME_RADIUS = 80;
-const BALL_RADIUS = 20;
-const GOAL_WIDTH = 160;
-const GOAL_HEIGHT = 240;
+const SIZE_MULTIPLIER = Number(
+  process.env.REACT_APP_SIZE_MULTIPLIER ?? process.env.SIZE_MULTIPLIER ?? 1
+) || 1;
 const GRAVITY = 0.6;
 const SLIME_SPEED = 5;
 const SLIME_JUMP_POWER = -12;
@@ -72,12 +71,6 @@ const AVAILABLE_SHAPES = [
   'tank',
   'sunflower',
 ];
-const computeStartPositions = (fieldWidth) => {
-  const leftX = Math.max(SLIME_RADIUS + 10, GOAL_WIDTH * 0.6);
-  const rightX = Math.min(fieldWidth - SLIME_RADIUS - 10, fieldWidth - GOAL_WIDTH * 0.6);
-  return { leftX, rightX };
-};
-
 const SlimeSoccer = () => {
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
@@ -110,6 +103,22 @@ const SlimeSoccer = () => {
   }));
   const GAME_WIDTH = gameDimensions.width;
   const GAME_HEIGHT = gameDimensions.height;
+  const fullScreenSize = Math.min(GAME_WIDTH, GAME_HEIGHT);
+  const playerSize = (SIZE_MULTIPLIER * fullScreenSize) / 7;
+  const ballSize = (SIZE_MULTIPLIER * fullScreenSize) / 22;
+  const goalSize = (SIZE_MULTIPLIER * fullScreenSize) / 4;
+  const SLIME_RADIUS = playerSize / 2;
+  const BALL_RADIUS = ballSize / 2;
+  const GOAL_WIDTH = goalSize;
+  const GOAL_HEIGHT = goalSize;
+  const computeStartPositions = useCallback(
+    (fieldWidth) => {
+      const leftX = Math.max(SLIME_RADIUS + 10, GOAL_WIDTH * 0.6);
+      const rightX = Math.min(fieldWidth - SLIME_RADIUS - 10, fieldWidth - GOAL_WIDTH * 0.6);
+      return { leftX, rightX };
+    },
+    [SLIME_RADIUS, GOAL_WIDTH]
+  );
 
   useEffect(() => {
     const handleResize = () => {
@@ -650,7 +659,16 @@ const SlimeSoccer = () => {
       ai.vy = SLIME_JUMP_POWER;
     }
     
-  }, [GAME_HEIGHT, GAME_WIDTH, playerMode, timeLeft, gameMode]);
+  }, [
+    BALL_RADIUS,
+    GAME_HEIGHT,
+    GAME_WIDTH,
+    GOAL_WIDTH,
+    SLIME_RADIUS,
+    computeStartPositions,
+    playerMode,
+    timeLeft,
+  ]);
 
   const updatePhysics = useCallback(() => {
     const state = gameStateRef.current;
@@ -857,7 +875,17 @@ const SlimeSoccer = () => {
         }
       }
     });
-  }, [GAME_HEIGHT, GAME_WIDTH, playerMode, triggerGoalCelebration, updateAI]);
+  }, [
+    BALL_RADIUS,
+    GAME_HEIGHT,
+    GAME_WIDTH,
+    GOAL_HEIGHT,
+    GOAL_WIDTH,
+    SLIME_RADIUS,
+    playerMode,
+    triggerGoalCelebration,
+    updateAI,
+  ]);
 
   const drawHelmet = (ctx, x, y, radius, type) => {
     ctx.save();
