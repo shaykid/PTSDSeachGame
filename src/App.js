@@ -101,6 +101,7 @@ const SlimeSoccer = () => {
   }));
   const GAME_WIDTH = gameDimensions.width;
   const GAME_HEIGHT = gameDimensions.height;
+  const isLandscape = GAME_WIDTH > GAME_HEIGHT;
   const fullScreenSize = Math.min(GAME_WIDTH, GAME_HEIGHT);
   const playerSize = (SIZE_MULTIPLIER * fullScreenSize) / 7;
   const ballSize = (SIZE_MULTIPLIER * fullScreenSize) / 22;
@@ -1652,11 +1653,13 @@ const SlimeSoccer = () => {
       
       {(gameStarted || winner) && (
         <div className="fixed inset-0 flex flex-col items-center justify-start bg-green-700">
-          <div className="absolute top-0 left-0 right-0 bg-green-800 px-8 py-4 w-full flex justify-between items-center z-10">
-            <span className="text-xl font-bold">{t('cyanTeam')}: {score.left}</span>
-            <span className="text-2xl font-mono">{formatTime(timeLeft)}</span>
-            <span className="text-xl font-bold">{score.right} : {t('redTeam')}</span>
-          </div>
+          {!isLandscape && (
+            <div className="absolute top-0 left-0 right-0 bg-green-800 px-8 py-4 w-full flex justify-between items-center z-10">
+              <span className="text-xl font-bold">{t('cyanTeam')}: {score.left}</span>
+              <span className="text-2xl font-mono">{formatTime(timeLeft)}</span>
+              <span className="text-xl font-bold">{score.right} : {t('redTeam')}</span>
+            </div>
+          )}
           
           <canvas
             ref={canvasRef}
