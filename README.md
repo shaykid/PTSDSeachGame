@@ -110,8 +110,11 @@ npm install -g pm2
 # Build the production bundle
 npm run build
 
-# Serve the build folder on the port from .env (defaults to 3000)
-pm2 serve build 3000 --name seachten-therapeutic-game --spa
+# Load .env and serve the build folder on the configured PORT
+set -a
+source .env
+set +a
+pm2 serve build "${PORT:-3000}" --name PTSD-Play --spa
 
 # Save the PM2 process list for reboot persistence
 pm2 save
