@@ -58,9 +58,11 @@ const SIZE_MULTIPLIER = Number(
 const GRAVITY = 0.6;
 const SLIME_SPEED = 5;
 const SLIME_JUMP_POWER = -12;
+const BALL_SPEED_MULTIPLIER = 0.5;
+const BALL_GRAVITY = GRAVITY * BALL_SPEED_MULTIPLIER;
 const BALL_DAMPING = 0.99;
 const BALL_BOUNCE_DAMPING = 0.8;
-const MAX_BALL_SPEED = 13;
+const MAX_BALL_SPEED = 13 * BALL_SPEED_MULTIPLIER;
 const AI_REACTION_DISTANCE = 300;
 const AI_PREDICTION_TIME = 30;
 const WAIT_START = Number(
@@ -720,7 +722,7 @@ const SlimeSoccer = () => {
     let tempVy = ball.vy;
     
     for (let t = 0; t < 100; t++) {
-      tempVy += GRAVITY;
+      tempVy += BALL_GRAVITY;
       tempVx *= BALL_DAMPING;
       tempX += tempVx;
       tempY += tempVy;
@@ -1008,15 +1010,19 @@ const SlimeSoccer = () => {
       if (!grabber.isGrabbing) {
         const releaseAngle = state.ball.grabAngle;
         const releaseSpeed = Math.abs(state.ball.grabAngularVelocity) * 20;
-        state.ball.vx = grabber.vx * 1.5 + Math.cos(releaseAngle) * (3 + releaseSpeed);
-        state.ball.vy = grabber.vy - 2 + Math.sin(releaseAngle) * releaseSpeed * 0.3;
+        state.ball.vx = (
+          grabber.vx * 1.5 + Math.cos(releaseAngle) * (3 + releaseSpeed)
+        ) * BALL_SPEED_MULTIPLIER;
+        state.ball.vy = (
+          grabber.vy - 2 + Math.sin(releaseAngle) * releaseSpeed * 0.3
+        ) * BALL_SPEED_MULTIPLIER;
         state.ball.grabbedBy = null;
         state.ball.grabAngle = 0;
         state.ball.grabAngularVelocity = 0;
         grabber.hasBall = false;
       }
     } else {
-      state.ball.vy += GRAVITY;
+      state.ball.vy += BALL_GRAVITY;
       state.ball.vx *= BALL_DAMPING;
       state.ball.x += state.ball.vx;
       state.ball.y += state.ball.vy;
@@ -1069,8 +1075,8 @@ const SlimeSoccer = () => {
             state.ball.grabAngularVelocity = 0;
             otherSlime.hasBall = false;
             
-            state.ball.vx = Math.cos(angle) * 8 + slime.vx;
-            state.ball.vy = Math.sin(angle) * 8 + slime.vy;
+            state.ball.vx = (Math.cos(angle) * 8 + slime.vx) * BALL_SPEED_MULTIPLIER;
+            state.ball.vy = (Math.sin(angle) * 8 + slime.vy) * BALL_SPEED_MULTIPLIER;
           }
         }
         else if (slime.isGrabbing && !state.ball.grabbedBy) {
@@ -1089,8 +1095,12 @@ const SlimeSoccer = () => {
             state.ball.y = targetY;
             
             const speed = Math.sqrt(state.ball.vx * state.ball.vx + state.ball.vy * state.ball.vy);
-            state.ball.vx = Math.cos(angle) * speed * 1.5 + slime.vx * 0.5;
-            state.ball.vy = Math.sin(angle) * speed * 1.5 + slime.vy * 0.5;
+            state.ball.vx = (
+              Math.cos(angle) * speed * 1.5 + slime.vx * 0.5
+            ) * BALL_SPEED_MULTIPLIER;
+            state.ball.vy = (
+              Math.sin(angle) * speed * 1.5 + slime.vy * 0.5
+            ) * BALL_SPEED_MULTIPLIER;
             
             const newSpeed = Math.sqrt(state.ball.vx * state.ball.vx + state.ball.vy * state.ball.vy);
             if (newSpeed > MAX_BALL_SPEED) {
