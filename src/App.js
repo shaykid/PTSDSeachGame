@@ -551,7 +551,8 @@ const SlimeSoccer = () => {
       vy: 0,
       grabbedBy: null,
       grabAngle: 0,
-      grabAngularVelocity: 0
+      grabAngularVelocity: 0,
+      haltedUntil: 0
     }
   });
 
@@ -646,6 +647,7 @@ const SlimeSoccer = () => {
     state.ball.grabbedBy = null;
     state.ball.grabAngle = 0;
     state.ball.grabAngularVelocity = 0;
+    state.ball.haltedUntil = Date.now() + 2000; // 2 second delay before ball starts
   };
 
   const resetGame = () => {
@@ -1013,68 +1015,73 @@ const SlimeSoccer = () => {
       }
     });
     
-    if (state.ball.grabbedBy) {
-      const grabber = state.ball.grabbedBy === 'left' ? state.leftSlime : state.rightSlime;
-      const slimeDirection = state.ball.grabbedBy === 'left' ? 1 : -1;
-      
-      state.ball.grabAngularVelocity += -grabber.vx * 0.008 * slimeDirection;
-      
-      state.ball.grabAngularVelocity *= 0.85;
-      state.ball.grabAngle += state.ball.grabAngularVelocity;
-      
-      if (state.ball.grabbedBy === 'left') {
-        if (state.ball.grabAngle < -Math.PI / 2) {
-          state.ball.grabAngle = -Math.PI / 2;
+    // Check if ball is halted (2 second delay before ball starts moving)
+    const ballIsHalted = Date.now() < state.ball.haltedUntil;
+
+    if (!ballIsHalted) {
+      if (state.ball.grabbedBy) {
+        const grabber = state.ball.grabbedBy === 'left' ? state.leftSlime : state.rightSlime;
+        const slimeDirection = state.ball.grabbedBy === 'left' ? 1 : -1;
+
+        state.ball.grabAngularVelocity += -grabber.vx * 0.008 * slimeDirection;
+
+        state.ball.grabAngularVelocity *= 0.85;
+        state.ball.grabAngle += state.ball.grabAngularVelocity;
+
+        if (state.ball.grabbedBy === 'left') {
+          if (state.ball.grabAngle < -Math.PI / 2) {
+            state.ball.grabAngle = -Math.PI / 2;
+            state.ball.grabAngularVelocity = 0;
+          } else if (state.ball.grabAngle > Math.PI / 2) {
+            state.ball.grabAngle = Math.PI / 2;
+            state.ball.grabAngularVelocity = 0;
+          }
+        } else {
+          while (state.ball.grabAngle < 0) state.ball.grabAngle += Math.PI * 2;
+          while (state.ball.grabAngle > Math.PI * 2) state.ball.grabAngle -= Math.PI * 2;
+
+          if (state.ball.grabAngle < Math.PI / 2 && state.ball.grabAngle >= 0) {
+            state.ball.grabAngle = Math.PI / 2;
+            state.ball.grabAngularVelocity = 0;
+          } else if (state.ball.grabAngle > 3 * Math.PI / 2 ||
+                     (state.ball.grabAngle < Math.PI / 2 && state.ball.grabAngle < 0)) {
+            state.ball.grabAngle = 3 * Math.PI / 2;
+            state.ball.grabAngularVelocity = 0;
+          }
+        }
+
+        const holdDistance = SLIME_RADIUS + BALL_RADIUS - 5;
+        state.ball.x = grabber.x + Math.cos(state.ball.grabAngle) * holdDistance;
+        state.ball.y = grabber.y + Math.sin(state.ball.grabAngle) * holdDistance;
+
+        state.ball.vx = grabber.vx;
+        state.ball.vy = grabber.vy;
+
+        if (!grabber.isGrabbing) {
+          const releaseAngle = state.ball.grabAngle;
+          const releaseSpeed = Math.abs(state.ball.grabAngularVelocity) * 20;
+          state.ball.vx = (
+            grabber.vx * 1.5 + Math.cos(releaseAngle) * (3 + releaseSpeed)
+          ) * BALL_SPEED_MULTIPLIER;
+          state.ball.vy = (
+            grabber.vy - 2 + Math.sin(releaseAngle) * releaseSpeed * 0.3
+          ) * BALL_SPEED_MULTIPLIER;
+          state.ball.grabbedBy = null;
+          state.ball.grabAngle = 0;
           state.ball.grabAngularVelocity = 0;
-        } else if (state.ball.grabAngle > Math.PI / 2) {
-          state.ball.grabAngle = Math.PI / 2;
-          state.ball.grabAngularVelocity = 0;
+          grabber.hasBall = false;
         }
       } else {
-        while (state.ball.grabAngle < 0) state.ball.grabAngle += Math.PI * 2;
-        while (state.ball.grabAngle > Math.PI * 2) state.ball.grabAngle -= Math.PI * 2;
-        
-        if (state.ball.grabAngle < Math.PI / 2 && state.ball.grabAngle >= 0) {
-          state.ball.grabAngle = Math.PI / 2;
-          state.ball.grabAngularVelocity = 0;
-        } else if (state.ball.grabAngle > 3 * Math.PI / 2 || 
-                   (state.ball.grabAngle < Math.PI / 2 && state.ball.grabAngle < 0)) {
-          state.ball.grabAngle = 3 * Math.PI / 2;
-          state.ball.grabAngularVelocity = 0;
-        }
-      }
-      
-      const holdDistance = SLIME_RADIUS + BALL_RADIUS - 5;
-      state.ball.x = grabber.x + Math.cos(state.ball.grabAngle) * holdDistance;
-      state.ball.y = grabber.y + Math.sin(state.ball.grabAngle) * holdDistance;
-      
-      state.ball.vx = grabber.vx;
-      state.ball.vy = grabber.vy;
-      
-      if (!grabber.isGrabbing) {
-        const releaseAngle = state.ball.grabAngle;
-        const releaseSpeed = Math.abs(state.ball.grabAngularVelocity) * 20;
-        state.ball.vx = (
-          grabber.vx * 1.5 + Math.cos(releaseAngle) * (3 + releaseSpeed)
-        ) * BALL_SPEED_MULTIPLIER;
-        state.ball.vy = (
-          grabber.vy - 2 + Math.sin(releaseAngle) * releaseSpeed * 0.3
-        ) * BALL_SPEED_MULTIPLIER;
-        state.ball.grabbedBy = null;
-        state.ball.grabAngle = 0;
-        state.ball.grabAngularVelocity = 0;
-        grabber.hasBall = false;
-      }
-    } else {
-      state.ball.vy += BALL_GRAVITY;
-      state.ball.vx *= BALL_DAMPING;
-      state.ball.x += state.ball.vx;
-      state.ball.y += state.ball.vy;
+        state.ball.vy += BALL_GRAVITY;
+        state.ball.vx *= BALL_DAMPING;
+        state.ball.x += state.ball.vx;
+        state.ball.y += state.ball.vy;
 
-      // Random horizontal shift while falling (±10-40 pixels, ~3% chance per frame)
-      if (state.ball.vy > 0 && Math.random() < 0.03) {
-        const shiftAmount = (10 + Math.random() * 30) * (Math.random() < 0.5 ? -1 : 1);
-        state.ball.x += shiftAmount;
+        // Random horizontal shift while falling (±10-40 pixels, ~3% chance per frame)
+        if (state.ball.vy > 0 && Math.random() < 0.03) {
+          const shiftAmount = (10 + Math.random() * 30) * (Math.random() < 0.5 ? -1 : 1);
+          state.ball.x += shiftAmount;
+        }
       }
     }
     
@@ -1107,61 +1114,64 @@ const SlimeSoccer = () => {
       state.ball.vy = -state.ball.vy * BALL_BOUNCE_DAMPING;
     }
     
-    [state.leftSlime, state.rightSlime].forEach((slime, index) => {
-      const slimeName = index === 0 ? 'left' : 'right';
-      const otherSlime = index === 0 ? state.rightSlime : state.leftSlime;
-      const dx = state.ball.x - slime.x;
-      const dy = state.ball.y - slime.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      
-      if (distance < SLIME_RADIUS + BALL_RADIUS) {
-        if (state.ball.grabbedBy && state.ball.grabbedBy !== slimeName) {
-          const angle = Math.atan2(dy, dx);
-          const speed = Math.sqrt(slime.vx * slime.vx + slime.vy * slime.vy);
-          
-          if (speed > 2 || Math.abs(slime.vy) > 5) {
-            state.ball.grabbedBy = null;
-            state.ball.grabAngle = 0;
-            state.ball.grabAngularVelocity = 0;
-            otherSlime.hasBall = false;
-            
-            state.ball.vx = (Math.cos(angle) * 8 + slime.vx) * BALL_SPEED_MULTIPLIER;
-            state.ball.vy = (Math.sin(angle) * 8 + slime.vy) * BALL_SPEED_MULTIPLIER;
+    // Only allow ball-slime collision when ball is not halted
+    if (!ballIsHalted) {
+      [state.leftSlime, state.rightSlime].forEach((slime, index) => {
+        const slimeName = index === 0 ? 'left' : 'right';
+        const otherSlime = index === 0 ? state.rightSlime : state.leftSlime;
+        const dx = state.ball.x - slime.x;
+        const dy = state.ball.y - slime.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance < SLIME_RADIUS + BALL_RADIUS) {
+          if (state.ball.grabbedBy && state.ball.grabbedBy !== slimeName) {
+            const angle = Math.atan2(dy, dx);
+            const speed = Math.sqrt(slime.vx * slime.vx + slime.vy * slime.vy);
+
+            if (speed > 2 || Math.abs(slime.vy) > 5) {
+              state.ball.grabbedBy = null;
+              state.ball.grabAngle = 0;
+              state.ball.grabAngularVelocity = 0;
+              otherSlime.hasBall = false;
+
+              state.ball.vx = (Math.cos(angle) * 8 + slime.vx) * BALL_SPEED_MULTIPLIER;
+              state.ball.vy = (Math.sin(angle) * 8 + slime.vy) * BALL_SPEED_MULTIPLIER;
+            }
           }
-        }
-        else if (slime.isGrabbing && !state.ball.grabbedBy) {
-          state.ball.grabbedBy = slimeName;
-          state.ball.grabAngle = Math.atan2(dy, dx);
-          state.ball.grabAngularVelocity = 0;
-          slime.hasBall = true;
-        } 
-        else if (!state.ball.grabbedBy) {
-          const angle = Math.atan2(dy, dx);
-          const targetX = slime.x + Math.cos(angle) * (SLIME_RADIUS + BALL_RADIUS);
-          const targetY = slime.y + Math.sin(angle) * (SLIME_RADIUS + BALL_RADIUS);
-          
-          if (state.ball.y < slime.y || Math.abs(angle) < Math.PI * 0.5) {
-            state.ball.x = targetX;
-            state.ball.y = targetY;
-            
-            const speed = Math.sqrt(state.ball.vx * state.ball.vx + state.ball.vy * state.ball.vy);
-            state.ball.vx = (
-              Math.cos(angle) * speed * 1.5 + slime.vx * 0.5
-            ) * BALL_SPEED_MULTIPLIER;
-            state.ball.vy = (
-              Math.sin(angle) * speed * 1.5 + slime.vy * 0.5
-            ) * BALL_SPEED_MULTIPLIER;
-            
-            const newSpeed = Math.sqrt(state.ball.vx * state.ball.vx + state.ball.vy * state.ball.vy);
-            if (newSpeed > MAX_BALL_SPEED) {
-              const scale = MAX_BALL_SPEED / newSpeed;
-              state.ball.vx *= scale;
-              state.ball.vy *= scale;
+          else if (slime.isGrabbing && !state.ball.grabbedBy) {
+            state.ball.grabbedBy = slimeName;
+            state.ball.grabAngle = Math.atan2(dy, dx);
+            state.ball.grabAngularVelocity = 0;
+            slime.hasBall = true;
+          }
+          else if (!state.ball.grabbedBy) {
+            const angle = Math.atan2(dy, dx);
+            const targetX = slime.x + Math.cos(angle) * (SLIME_RADIUS + BALL_RADIUS);
+            const targetY = slime.y + Math.sin(angle) * (SLIME_RADIUS + BALL_RADIUS);
+
+            if (state.ball.y < slime.y || Math.abs(angle) < Math.PI * 0.5) {
+              state.ball.x = targetX;
+              state.ball.y = targetY;
+
+              const speed = Math.sqrt(state.ball.vx * state.ball.vx + state.ball.vy * state.ball.vy);
+              state.ball.vx = (
+                Math.cos(angle) * speed * 1.5 + slime.vx * 0.5
+              ) * BALL_SPEED_MULTIPLIER;
+              state.ball.vy = (
+                Math.sin(angle) * speed * 1.5 + slime.vy * 0.5
+              ) * BALL_SPEED_MULTIPLIER;
+
+              const newSpeed = Math.sqrt(state.ball.vx * state.ball.vx + state.ball.vy * state.ball.vy);
+              if (newSpeed > MAX_BALL_SPEED) {
+                const scale = MAX_BALL_SPEED / newSpeed;
+                state.ball.vx *= scale;
+                state.ball.vy *= scale;
+              }
             }
           }
         }
-      }
-    });
+      });
+    }
   }, [
     BALL_RADIUS,
     GAME_HEIGHT,
