@@ -102,7 +102,7 @@ const SlimeSoccer = () => {
   const GAME_WIDTH = gameDimensions.width;
   const GAME_HEIGHT = gameDimensions.height;
   const fullScreenSize = Math.min(GAME_WIDTH, GAME_HEIGHT);
-  const playerSize = (SIZE_MULTIPLIER * fullScreenSize) / 10;
+  const playerSize = (SIZE_MULTIPLIER * fullScreenSize) / 7;
   const ballSize = (SIZE_MULTIPLIER * fullScreenSize) / 22;
   const goalSize = (SIZE_MULTIPLIER * fullScreenSize) / 4;
   const SLIME_RADIUS = playerSize / 2;
