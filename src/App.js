@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
 const TRANSLATIONS = {
   "he-IL": {
@@ -101,6 +101,53 @@ const AVAILABLE_SHAPES = [
   'tank',
   'sunflower',
 ];
+
+const clampPercent = (value, min = 10, max = 100) => {
+  if (!Number.isFinite(value)) return null;
+  return Math.min(Math.max(value, min), max);
+};
+
+const parsePercentValue = (value, min = 10, max = 100) => {
+  if (value === null || value === undefined) return null;
+  const numeric = typeof value === 'string' ? Number(value.replace('%', '')) : Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  return clampPercent(numeric, min, max);
+};
+
+const parseSetSizeParam = () => {
+  const params = new URLSearchParams(window.location.search);
+  const raw = params.get('SetSize');
+  if (!raw) return null;
+
+  try {
+    const decoded = decodeURIComponent(raw);
+    const parsed = JSON.parse(decoded);
+    const goalpostPercent = parsePercentValue(
+      parsed.goalpost_height ?? parsed.goalpostHeight ?? parsed.goalpost,
+      10,
+      100
+    );
+    const userAvatarPercent = parsePercentValue(
+      parsed.user_avatar_size ?? parsed.userAvatarSize ?? parsed.avatar,
+      10,
+      100
+    );
+    const ballRadiusPercent = parsePercentValue(
+      parsed.ball_radius_multiply ?? parsed.ballRadiusMultiply ?? parsed.ball,
+      1,
+      100
+    );
+
+    return {
+      goalpostPercent,
+      userAvatarPercent,
+      ballRadiusMultiplier: ballRadiusPercent ? ballRadiusPercent / 100 : null,
+    };
+  } catch (error) {
+    return null;
+  }
+};
+
 const SlimeSoccer = () => {
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
@@ -135,6 +182,7 @@ const SlimeSoccer = () => {
   const displayHistoryImages =
     (process.env.REACT_APP_DISPLAY_HISTORY_IMAGES ?? process.env.DISPLAY_HISTORY_IMAGES ?? 'TRUE')
       .toUpperCase() !== 'FALSE';
+  const setSizeConfig = useMemo(() => parseSetSizeParam(), []);
   const [gameDimensions, setGameDimensions] = useState(() => ({
     width: window.innerWidth,
     height: window.innerHeight,
@@ -143,13 +191,22 @@ const SlimeSoccer = () => {
   const GAME_HEIGHT = gameDimensions.height;
   const isLandscape = GAME_WIDTH > GAME_HEIGHT;
   const fullScreenSize = Math.min(GAME_WIDTH, GAME_HEIGHT);
-  const playerSize = (SIZE_MULTIPLIER * fullScreenSize) / 7;
-  const ballSize = (SIZE_MULTIPLIER * fullScreenSize) / 22;
-  const goalSize = (SIZE_MULTIPLIER * fullScreenSize) / 4;
+  const defaultPlayerSize = (SIZE_MULTIPLIER * fullScreenSize) / 7;
+  const defaultBallSize = (SIZE_MULTIPLIER * fullScreenSize) / 22;
+  const defaultGoalSize = (SIZE_MULTIPLIER * fullScreenSize) / 4;
+  const playerSize = setSizeConfig?.userAvatarPercent
+    ? (setSizeConfig.userAvatarPercent / 100) * GAME_HEIGHT
+    : defaultPlayerSize;
+  const ballRadiusMultiplier = setSizeConfig?.ballRadiusMultiplier ?? null;
+  const ballSize = ballRadiusMultiplier ? playerSize * ballRadiusMultiplier * 2 : defaultBallSize;
+  const goalWidth = defaultGoalSize;
+  const goalHeight = setSizeConfig?.goalpostPercent
+    ? (setSizeConfig.goalpostPercent / 100) * GAME_HEIGHT
+    : defaultGoalSize;
   const SLIME_RADIUS = playerSize / 2;
   const BALL_RADIUS = ballSize / 2;
-  const GOAL_WIDTH = goalSize;
-  const GOAL_HEIGHT = goalSize;
+  const GOAL_WIDTH = goalWidth;
+  const GOAL_HEIGHT = goalHeight;
   const computeStartPositions = useCallback(
     (fieldWidth) => {
       const leftX = Math.max(SLIME_RADIUS + 10, GOAL_WIDTH * 0.6);
