@@ -87,6 +87,7 @@ const SlimeSoccer = () => {
   const logoImageRef = useRef(null);
   const goalAudioRef = useRef(null);
   const goalTimeoutRef = useRef(null);
+  const startGameTimeoutRef = useRef(null);
   
   // Game state
   const [gameMode, setGameMode] = useState(null);
@@ -165,6 +166,9 @@ const SlimeSoccer = () => {
     return () => {
       if (goalTimeoutRef.current) {
         clearTimeout(goalTimeoutRef.current);
+      }
+      if (startGameTimeoutRef.current) {
+        clearTimeout(startGameTimeoutRef.current);
       }
     };
   }, []);
@@ -380,10 +384,17 @@ const SlimeSoccer = () => {
       'worldcup': 300
     };
     
+    if (startGameTimeoutRef.current) {
+      clearTimeout(startGameTimeoutRef.current);
+      startGameTimeoutRef.current = null;
+    }
     resetGame();
     setGameMode(mode);
     setTimeLeft(times[mode]);
-    setGameStarted(true);
+    setGameStarted(false);
+    startGameTimeoutRef.current = setTimeout(() => {
+      setGameStarted(true);
+    }, 2000);
   };
 
   // AI logic
