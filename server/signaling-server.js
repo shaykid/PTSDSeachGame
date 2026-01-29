@@ -1,7 +1,13 @@
 const http = require('http');
+const path = require('path');
 const WebSocket = require('ws');
+const dotenv = require('dotenv');
 
-const PORT = Number(process.env.SIGNALING_PORT ?? 3001);
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
+const PORT = Number(
+  process.env.REACT_APP_SIGNALING_PORT ?? process.env.SIGNALING_PORT ?? 3001,
+);
 
 const server = http.createServer((_, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
