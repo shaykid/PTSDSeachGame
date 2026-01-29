@@ -1000,16 +1000,7 @@ const SlimeSoccer = () => {
       const inOwnGoalArea = (isLeftSlime && slime.x < GOAL_WIDTH) || (!isLeftSlime && slime.x > GAME_WIDTH - GOAL_WIDTH);
       
       if (inOwnGoalArea) {
-        slime.goalLineTime += 1/60;
-        
-        if (slime.goalLineTime >= 1) {
-          if (isLeftSlime) {
-            setScore(prev => ({ ...prev, right: prev.right + 1 }));
-          } else {
-            setScore(prev => ({ ...prev, left: prev.left + 1 }));
-          }
-          resetPositions();
-        }
+        slime.goalLineTime = Math.min(slime.goalLineTime + 1/60, 1);
       } else {
         slime.goalLineTime = 0;
       }
