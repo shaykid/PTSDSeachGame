@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;700&family=Solitreo&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Solitreo&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -117,20 +117,15 @@ canvas {
 }
 
 .goal-celebration-text {
-  font-family: 'Heebo', sans-serif;
-  animation: goal-text-run 1.5s linear;
+  font-family: 'Solitreo', cursive;
+  animation: goal-text-run 3s linear;
 }
 
 @keyframes goal-text-run {
   0% {
-    transform: translateX(100vw);
+    transform: translateX(35vw);
   }
   100% {
-    transform: translateX(-100vw);
+    transform: translateX(-35vw);
   }
-}
-
-.goal-celebration-image {
-  width: 0.66vw;
-  height: auto;
 }
