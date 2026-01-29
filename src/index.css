@@ -49,6 +49,10 @@ canvas {
   transform: translateY(-50%);
 }
 
+.touch-controls-centered {
+  justify-content: center;
+}
+
 .touch-group {
   display: flex;
   flex-direction: column;
@@ -79,6 +83,14 @@ canvas {
 
 .touch-button:active {
   background: rgba(180, 255, 200, 0.9);
+}
+
+.game-timer {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #ffffff;
+  font-family: ui-monospace, SFMono-Regular, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', monospace;
 }
 
 .duration-button-large {

@@ -2107,20 +2107,24 @@ const SlimeSoccer = () => {
           {!isLandscape && (
             <div className="absolute top-0 left-0 right-0 bg-green-800 px-8 py-4 w-full flex justify-between items-center z-10">
               <span className="text-xl font-bold">{t('cyanTeam')}: {score.left}</span>
-              <span className="text-2xl font-mono">{formatTime(timeLeft)}</span>
               <span className="text-xl font-bold">{score.right} : {t('redTeam')}</span>
             </div>
           )}
           
-          <canvas
-            ref={canvasRef}
-            width={GAME_WIDTH}
-            height={GAME_HEIGHT}
-            className="border-4 border-green-700 w-full h-full game-canvas"
-          />
+          <div className="relative w-full h-full">
+            <div className="absolute top-2 left-1/2 z-10 -translate-x-1/2 game-timer">
+              {formatTime(timeLeft)}
+            </div>
+            <canvas
+              ref={canvasRef}
+              width={GAME_WIDTH}
+              height={GAME_HEIGHT}
+              className="border-4 border-green-700 w-full h-full game-canvas"
+            />
+          </div>
 
           {gameStarted && isTouchDevice && (
-            <div className="touch-controls">
+            <div className={`touch-controls${playerMode === 'multi' ? '' : ' touch-controls-centered'}`}>
               <div className="touch-group">
                 <div className="touch-row">
                   <TouchButton label="↑" actionKey="arrowup" />
