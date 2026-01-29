@@ -66,10 +66,30 @@ npm start
 - ←/→ - תזוזה / Move
 - ↓ - אחיזה / Grab
 
+### מצב שני מכשירים / Remote Multiplayer
+כדי לאפשר חיבור בין שני מכשירים נדרש שרת סיגנלינג (WebRTC signaling).
+
+```bash
+# Start the signaling server (default port 3001)
+npm run server
+
+# Start the React dev server
+npm start
+```
+
+במידת הצורך אפשר להגדיר כתובת שרת סיגנלינג מותאמת:
+
+```bash
+# Example: use a remote signaling server
+REACT_APP_SIGNALING_URL=wss://your-domain.example.com npm start
+```
+
 ## מבנה הפרויקט / Project Structure
 
 ```
 seachten-therapeutic-game/
+├── server/
+│   └── signaling-server.js
 ├── public/
 │   ├── index.html
 │   └── favicon.ico
@@ -106,6 +126,9 @@ npm test
 ```bash
 # Install PM2 globally (once)
 npm install -g pm2
+
+# Start the signaling server (default port 3001)
+pm2 start server/signaling-server.js --name PTSD-Play-Signaling
 
 # Build the production bundle
 npm run build

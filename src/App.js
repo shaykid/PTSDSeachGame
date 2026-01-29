@@ -293,15 +293,11 @@ const parseRoomIdFromUrl = () => {
   return params.get('room');
 };
 
-// Parse signaling data from URL hash
-const parseSignalingFromUrl = () => {
-  const hash = window.location.hash.slice(1);
-  if (!hash) return null;
-  try {
-    return JSON.parse(decodeURIComponent(atob(hash)));
-  } catch {
-    return null;
-  }
+const getDefaultSignalingUrl = () => {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const hostname = window.location.hostname;
+  const port = process.env.REACT_APP_SIGNALING_PORT ?? '3001';
+  return `${protocol}//${hostname}:${port}`;
 };
 
 const clampPercent = (value, min = 10, max = 100) => {
@@ -433,9 +429,14 @@ const SlimeSoccer = () => {
   const [connectionStatus, setConnectionStatus] = useState('idle'); // 'idle', 'waiting', 'connecting', 'connected', 'failed'
   const peerConnectionRef = useRef(null);
   const dataChannelRef = useRef(null);
-  const pendingCandidatesRef = useRef([]);
+  const signalingSocketRef = useRef(null);
+  const signalingQueueRef = useRef([]);
 
   const resourceBaseUrl = `${process.env.PUBLIC_URL}/resources`;
+  const signalingUrl = useMemo(
+    () => process.env.REACT_APP_SIGNALING_URL ?? getDefaultSignalingUrl(),
+    []
+  );
   const displayHistoryImages =
     (process.env.REACT_APP_DISPLAY_HISTORY_IMAGES ?? process.env.DISPLAY_HISTORY_IMAGES ?? 'TRUE')
       .toUpperCase() !== 'FALSE';
@@ -526,13 +527,37 @@ const SlimeSoccer = () => {
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
     }
-    pendingCandidatesRef.current = [];
+  }, []);
+
+  const cleanupSignaling = useCallback(() => {
+    if (signalingSocketRef.current) {
+      signalingSocketRef.current.close();
+      signalingSocketRef.current = null;
+    }
+    signalingQueueRef.current = [];
   }, []);
 
   // Send data through WebRTC data channel
   const sendData = useCallback((data) => {
     if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
       dataChannelRef.current.send(JSON.stringify(data));
+    }
+  }, []);
+
+  const flushSignalingQueue = useCallback(() => {
+    const socket = signalingSocketRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    signalingQueueRef.current.forEach((message) => socket.send(message));
+    signalingQueueRef.current = [];
+  }, []);
+
+  const sendSignalingMessage = useCallback((message) => {
+    const socket = signalingSocketRef.current;
+    const payload = JSON.stringify(message);
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(payload);
+    } else {
+      signalingQueueRef.current.push(payload);
     }
   }, []);
 
@@ -641,7 +666,7 @@ const SlimeSoccer = () => {
   }, [handlePeerData]);
 
   // Create WebRTC offer (host)
-  const createOffer = useCallback(async () => {
+  const createOffer = useCallback(async (roomIdToUse) => {
     try {
       cleanupConnection();
       const pc = new RTCPeerConnection(RTC_CONFIG);
@@ -652,7 +677,11 @@ const SlimeSoccer = () => {
 
       pc.onicecandidate = (event) => {
         if (event.candidate) {
-          pendingCandidatesRef.current.push(event.candidate);
+          sendSignalingMessage({
+            type: 'iceCandidate',
+            roomId: roomIdToUse,
+            candidate: event.candidate,
+          });
         }
       };
 
@@ -684,7 +713,7 @@ const SlimeSoccer = () => {
       setConnectionStatus('failed');
       return null;
     }
-  }, [cleanupConnection, setupDataChannel]);
+  }, [cleanupConnection, sendSignalingMessage, setupDataChannel]);
 
   // Handle WebRTC answer (host)
   const handleAnswer = useCallback(async (answer) => {
@@ -712,7 +741,11 @@ const SlimeSoccer = () => {
 
       pc.onicecandidate = (event) => {
         if (event.candidate) {
-          pendingCandidatesRef.current.push(event.candidate);
+          sendSignalingMessage({
+            type: 'iceCandidate',
+            roomId,
+            candidate: event.candidate,
+          });
         }
       };
 
@@ -744,7 +777,60 @@ const SlimeSoccer = () => {
       setConnectionStatus('failed');
       return null;
     }
-  }, [cleanupConnection, setupDataChannel]);
+  }, [cleanupConnection, roomId, sendSignalingMessage, setupDataChannel]);
+
+  const handleSignalingMessage = useCallback(async (event) => {
+    try {
+      const message = JSON.parse(event.data);
+      if (message.type === 'offer' && !isHost) {
+        const answer = await createAnswer(message.offer);
+        if (answer) {
+          sendSignalingMessage({ type: 'answer', roomId, answer });
+        }
+      } else if (message.type === 'answer' && isHost) {
+        await handleAnswer(message.answer);
+      } else if (message.type === 'iceCandidate') {
+        const pc = peerConnectionRef.current;
+        if (pc && message.candidate) {
+          await pc.addIceCandidate(new RTCIceCandidate(message.candidate));
+        }
+      } else if (message.type === 'roomFull') {
+        setConnectionStatus('failed');
+      } else if (message.type === 'peerLeft') {
+        setConnectionStatus('failed');
+        setRemoteConnected(false);
+      }
+    } catch (error) {
+      console.error('Error handling signaling message:', error);
+    }
+  }, [createAnswer, handleAnswer, isHost, roomId, sendSignalingMessage]);
+
+  const connectSignaling = useCallback(() => {
+    const existingSocket = signalingSocketRef.current;
+    if (existingSocket && existingSocket.readyState === WebSocket.OPEN) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      const socket = new WebSocket(signalingUrl);
+      signalingSocketRef.current = socket;
+
+      socket.onopen = () => {
+        flushSignalingQueue();
+        resolve();
+      };
+      socket.onmessage = handleSignalingMessage;
+      socket.onerror = (error) => {
+        console.error('Signaling socket error:', error);
+        setConnectionStatus('failed');
+      };
+      socket.onclose = () => {
+        if (!remoteConnected) {
+          setConnectionStatus('failed');
+        }
+      };
+    });
+  }, [flushSignalingQueue, handleSignalingMessage, remoteConnected, signalingUrl]);
 
   // Start hosting a remote game
   const startHosting = useCallback(async () => {
@@ -754,31 +840,14 @@ const SlimeSoccer = () => {
     setConnectionStatus('waiting');
     setPlayerMode('remote');
     setSelectionStep('remoteSetup');
+    await connectSignaling();
+    sendSignalingMessage({ type: 'host', roomId: newRoomId });
 
-    // Store offer in localStorage for signaling (simple approach)
-    const offer = await createOffer();
+    const offer = await createOffer(newRoomId);
     if (offer) {
-      localStorage.setItem(`game_offer_${newRoomId}`, JSON.stringify(offer));
-
-      // Poll for answer
-      const pollForAnswer = setInterval(async () => {
-        const answerStr = localStorage.getItem(`game_answer_${newRoomId}`);
-        if (answerStr) {
-          clearInterval(pollForAnswer);
-          const answer = JSON.parse(answerStr);
-          await handleAnswer(answer);
-          localStorage.removeItem(`game_answer_${newRoomId}`);
-        }
-      }, 1000);
-
-      // Store interval ID for cleanup
-      const originalCleanup = cleanupConnection;
-      return () => {
-        clearInterval(pollForAnswer);
-        originalCleanup();
-      };
+      sendSignalingMessage({ type: 'offer', roomId: newRoomId, offer });
     }
-  }, [createOffer, handleAnswer, cleanupConnection]);
+  }, [connectSignaling, createOffer, sendSignalingMessage]);
 
   // Join a remote game
   const joinGame = useCallback(async (roomIdToJoin) => {
@@ -786,28 +855,15 @@ const SlimeSoccer = () => {
     setIsHost(false);
     setConnectionStatus('connecting');
     setPlayerMode('remote');
+    await connectSignaling();
+    sendSignalingMessage({ type: 'join', roomId: roomIdToJoin });
 
-    // Poll for offer from host
-    const pollForOffer = setInterval(async () => {
-      const offerStr = localStorage.getItem(`game_offer_${roomIdToJoin}`);
-      if (offerStr) {
-        clearInterval(pollForOffer);
-        const offer = JSON.parse(offerStr);
-        const answer = await createAnswer(offer);
-        if (answer) {
-          localStorage.setItem(`game_answer_${roomIdToJoin}`, JSON.stringify(answer));
-        }
-      }
-    }, 1000);
-
-    // Timeout after 30 seconds
     setTimeout(() => {
-      clearInterval(pollForOffer);
       if (connectionStatus === 'connecting') {
         setConnectionStatus('failed');
       }
     }, 30000);
-  }, [createAnswer, connectionStatus]);
+  }, [connectSignaling, connectionStatus, sendSignalingMessage]);
 
   // Copy link to clipboard
   const copyLinkToClipboard = useCallback(() => {
@@ -917,12 +973,9 @@ const SlimeSoccer = () => {
   useEffect(() => {
     return () => {
       cleanupConnection();
-      if (roomId) {
-        localStorage.removeItem(`game_offer_${roomId}`);
-        localStorage.removeItem(`game_answer_${roomId}`);
-      }
+      cleanupSignaling();
     };
-  }, [cleanupConnection, roomId]);
+  }, [cleanupConnection, cleanupSignaling]);
 
   // Load background images
   useEffect(() => {
