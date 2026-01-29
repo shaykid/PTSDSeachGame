@@ -319,6 +319,21 @@ const SlimeSoccer = () => {
   const signalingSocketRef = useRef(null);
   const signalingQueueRef = useRef([]);
 
+  const logDocumentAction = useCallback((action, details = {}) => {
+    console.log('[document-action]', action, {
+      timestamp: new Date().toISOString(),
+      ...details,
+    });
+  }, []);
+
+  const logDataChannelEvent = useCallback((direction, payload) => {
+    console.log('[data-channel]', direction, {
+      timestamp: new Date().toISOString(),
+      type: payload?.type,
+      payload,
+    });
+  }, []);
+
   const resourceBaseUrl = `${process.env.PUBLIC_URL}/resources`;
   const signalingUrl = useMemo(() => {
     return normalizeSignalingUrl(process.env.REACT_APP_SIGNALING_URL) ?? getDefaultSignalingUrl();
@@ -456,9 +471,16 @@ const SlimeSoccer = () => {
   // Send data through WebRTC data channel
   const sendData = useCallback((data) => {
     if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
+      logDataChannelEvent('send', data);
       dataChannelRef.current.send(JSON.stringify(data));
+    } else {
+      logDataChannelEvent('send-skipped', {
+        reason: 'dataChannelNotOpen',
+        data,
+        readyState: dataChannelRef.current?.readyState,
+      });
     }
-  }, []);
+  }, [logDataChannelEvent]);
 
   const flushSignalingQueue = useCallback(() => {
     const socket = signalingSocketRef.current;
@@ -471,10 +493,16 @@ const SlimeSoccer = () => {
     const socket = signalingSocketRef.current;
     const payload = JSON.stringify(message);
     if (socket && socket.readyState === WebSocket.OPEN) {
-      console.log('[signaling] sending message', message.type, message.roomId);
+      console.log('[signaling] sending message', message.type, message.roomId, {
+        timestamp: new Date().toISOString(),
+        message,
+      });
       socket.send(payload);
     } else {
-      console.warn('[signaling] socket not ready, queueing', message.type, message.roomId);
+      console.warn('[signaling] socket not ready, queueing', message.type, message.roomId, {
+        timestamp: new Date().toISOString(),
+        message,
+      });
       signalingQueueRef.current.push(payload);
     }
   }, []);
@@ -483,6 +511,7 @@ const SlimeSoccer = () => {
   const handlePeerData = useCallback((event) => {
     try {
       const data = JSON.parse(event.data);
+      logDataChannelEvent('receive', data);
 
       if (data.type === 'gameState') {
         // Sync game state from host
@@ -507,6 +536,13 @@ const SlimeSoccer = () => {
         }
       } else if (data.type === 'input') {
         // Receive input from peer
+        logDocumentAction('remote-input', {
+          left: data.left,
+          right: data.right,
+          up: data.up,
+          down: data.down,
+          isHost,
+        });
         if (isHost) {
           // Host receives guest (right player) input
           keysRef.current['arrowleft'] = data.left;
@@ -563,7 +599,7 @@ const SlimeSoccer = () => {
     } catch (e) {
       console.error('Error parsing peer data:', e);
     }
-  }, [isHost]);
+  }, [isHost, logDataChannelEvent, logDocumentAction]);
 
   // Setup data channel event handlers
   const setupDataChannel = useCallback((channel) => {
@@ -1204,6 +1240,16 @@ const SlimeSoccer = () => {
       if (e.target.tagName === 'INPUT') return;
       e.preventDefault();
       const key = e.key.toLowerCase();
+      logDocumentAction('keydown', {
+        key,
+        code: e.code,
+        repeat: e.repeat,
+        target: e.target.tagName,
+        altKey: e.altKey,
+        ctrlKey: e.ctrlKey,
+        shiftKey: e.shiftKey,
+        metaKey: e.metaKey,
+      });
       if (key === 'arrowup' || key === 'arrowdown' || key === 'arrowleft' || key === 'arrowright') {
         keysRef.current[key] = true;
       } else {
@@ -1215,6 +1261,16 @@ const SlimeSoccer = () => {
       if (e.target.tagName === 'INPUT') return;
       e.preventDefault();
       const key = e.key.toLowerCase();
+      logDocumentAction('keyup', {
+        key,
+        code: e.code,
+        repeat: e.repeat,
+        target: e.target.tagName,
+        altKey: e.altKey,
+        ctrlKey: e.ctrlKey,
+        shiftKey: e.shiftKey,
+        metaKey: e.metaKey,
+      });
       if (key === 'arrowup' || key === 'arrowdown' || key === 'arrowleft' || key === 'arrowright') {
         keysRef.current[key] = false;
       } else {
@@ -1229,7 +1285,7 @@ const SlimeSoccer = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, []);
+  }, [logDocumentAction]);
 
   // Timer
   useEffect(() => {
@@ -2343,18 +2399,42 @@ const SlimeSoccer = () => {
       onPointerDown={(event) => {
         event.preventDefault();
         event.currentTarget.setPointerCapture(event.pointerId);
+        logDocumentAction('pointerdown', {
+          actionKey,
+          label,
+          pointerId: event.pointerId,
+          pointerType: event.pointerType,
+        });
         setKeyState(actionKey, true);
       }}
       onPointerUp={(event) => {
         event.preventDefault();
+        logDocumentAction('pointerup', {
+          actionKey,
+          label,
+          pointerId: event.pointerId,
+          pointerType: event.pointerType,
+        });
         setKeyState(actionKey, false);
       }}
       onPointerCancel={(event) => {
         event.preventDefault();
+        logDocumentAction('pointercancel', {
+          actionKey,
+          label,
+          pointerId: event.pointerId,
+          pointerType: event.pointerType,
+        });
         setKeyState(actionKey, false);
       }}
       onPointerLeave={(event) => {
         event.preventDefault();
+        logDocumentAction('pointerleave', {
+          actionKey,
+          label,
+          pointerId: event.pointerId,
+          pointerType: event.pointerType,
+        });
         setKeyState(actionKey, false);
       }}
     >
