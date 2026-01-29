@@ -118,14 +118,14 @@ canvas {
 
 .goal-celebration-text {
   font-family: 'Solitreo', cursive;
-  animation: goal-text-run 3s linear;
+  animation: goal-text-run 1.5s linear;
 }
 
 @keyframes goal-text-run {
   0% {
-    transform: translateX(35vw);
+    transform: translateX(100vw);
   }
   100% {
-    transform: translateX(-35vw);
+    transform: translateX(-100vw);
   }
 }
