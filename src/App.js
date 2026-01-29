@@ -504,10 +504,9 @@ const SlimeSoccer = () => {
 
   // Generate join URL for remote multiplayer
   const getJoinUrl = useCallback((roomIdToUse) => {
-    const url = new URL(window.location.href);
-    url.searchParams.set('room', roomIdToUse);
-    url.hash = '';
-    return url.toString();
+    const baseUrl = new URL(`${window.location.origin}${window.location.pathname}`);
+    baseUrl.searchParams.set('room', roomIdToUse);
+    return baseUrl.toString();
   }, []);
 
   // QR code data URL
