@@ -452,6 +452,13 @@ const SlimeSoccer = () => {
     };
   }, [displayHistoryImages, handleHistoryImageShown, resourceBaseUrl, selectionStep]);
 
+  const playGoalSound = useCallback(() => {
+    if (goalAudioRef.current) {
+      goalAudioRef.current.currentTime = 0;
+      goalAudioRef.current.play().catch(() => {});
+    }
+  }, []);
+
   const triggerGoalCelebration = useCallback(() => {
     if (goalTimeoutRef.current) {
       clearTimeout(goalTimeoutRef.current);
@@ -460,10 +467,6 @@ const SlimeSoccer = () => {
     goalTimeoutRef.current = setTimeout(() => {
       setShowGoalCelebration(false);
     }, 1000);
-    if (goalAudioRef.current) {
-      goalAudioRef.current.currentTime = 0;
-      goalAudioRef.current.play().catch(() => {});
-    }
   }, []);
   
   const drawCannabisLeaf = (ctx, x, y, size) => {
@@ -1091,10 +1094,12 @@ const SlimeSoccer = () => {
     }
     
     if (state.ball.x <= BALL_RADIUS && state.ball.y > GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT) {
+      playGoalSound();
       triggerGoalCelebration();
       setScore(prev => ({ ...prev, right: prev.right + 1 }));
       resetPositions();
     } else if (state.ball.x >= GAME_WIDTH - BALL_RADIUS && state.ball.y > GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT) {
+      playGoalSound();
       triggerGoalCelebration();
       setScore(prev => ({ ...prev, left: prev.left + 1 }));
       resetPositions();
@@ -1171,6 +1176,7 @@ const SlimeSoccer = () => {
     GOAL_WIDTH,
     SLIME_RADIUS,
     playerMode,
+    playGoalSound,
     triggerGoalCelebration,
     updateAI,
   ]);
