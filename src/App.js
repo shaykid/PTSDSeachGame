@@ -1563,6 +1563,25 @@ const SlimeSoccer = () => {
       ctx.lineTo(GAME_WIDTH, j);
       ctx.stroke();
     }
+
+    const getScoreColor = (currentScore, opponentScore) => {
+      if (currentScore === opponentScore) {
+        return '#FFFFFF';
+      }
+      return currentScore > opponentScore ? '#0f4f1c' : '#4b4b4b';
+    };
+
+    const drawScoreAboveGoal = (goalCenterX, currentScore, opponentScore) => {
+      const scoreY = GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT - 24;
+      ctx.font = 'bold 28px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = getScoreColor(currentScore, opponentScore);
+      ctx.fillText(String(currentScore), goalCenterX, scoreY);
+    };
+
+    drawScoreAboveGoal(GOAL_WIDTH / 2, score.left, score.right);
+    drawScoreAboveGoal(GAME_WIDTH - GOAL_WIDTH / 2, score.right, score.left);
     
     // Draw goal line timers
     const drawGoalLineTimer = (slime, goalX, goalWidth) => {
@@ -1618,7 +1637,7 @@ const SlimeSoccer = () => {
     // Draw ball
     const ballType = selectedBall || 'cannabis';
     drawBall(ctx, state.ball.x, state.ball.y, BALL_RADIUS, ballType);
-  }, [GAME_HEIGHT, GAME_WIDTH, selectedShapes, selectedBall]);
+  }, [GAME_HEIGHT, GAME_WIDTH, GOAL_HEIGHT, GOAL_WIDTH, GROUND_HEIGHT, score, selectedShapes, selectedBall]);
 
   const gameLoop = useCallback((currentTime) => {
     if (gameStarted) {
