@@ -19,6 +19,13 @@ const rooms = new Map();
 
 const send = (socket, payload) => {
   if (socket && socket.readyState === WebSocket.OPEN) {
+    console.log('[signaling] sending to peer', {
+      role: socket.role ?? 'unknown',
+      roomId: socket.roomId ?? 'unknown',
+      type: payload?.type,
+      payload,
+      timestamp: new Date().toISOString(),
+    });
     socket.send(JSON.stringify(payload));
   }
 };
@@ -44,6 +51,13 @@ wss.on('connection', (ws, req) => {
     }
 
     const { type, roomId } = message;
+    console.log('[signaling] received message', {
+      type,
+      roomId,
+      role: ws.role ?? 'unknown',
+      payload: message,
+      timestamp: new Date().toISOString(),
+    });
     if (!roomId) {
       console.warn('[signaling] message missing roomId', { type });
       return;
