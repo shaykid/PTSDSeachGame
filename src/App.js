@@ -1707,12 +1707,13 @@ const SlimeSoccer = () => {
                 alt=""
                 className="absolute"
                 style={{
-                  width: '30vw',
-                  height: '30vh',
+                  width: '30vmin',
+                  height: '30vmin',
                   left: `${historyOverlay.position.x}%`,
                   top: `${historyOverlay.position.y}%`,
                   transform: 'translate(-50%, -50%)',
-                  objectFit: 'contain',
+                  objectFit: 'cover',
+                  borderRadius: '9999px',
                   opacity: historyOverlay.visible ? 0.6 : 0,
                   transition: 'opacity 0.2s ease-in-out'
                 }}
