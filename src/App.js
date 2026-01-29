@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 
 const TRANSLATIONS = {
   "he-IL": {
-    "mainTitle": "משחק להרגעה ליהלומי קרב",
+    "mainTitle": "רק 💎יהלומים 💎 משחקים",
     "gameTitle": "כדורגל טיפולי",
     "originalAuthor": "משחק מותאם ללוחמי PTSD",
     "adaptedBy": "פותח באהבה על ידי Seach Medical Group",
