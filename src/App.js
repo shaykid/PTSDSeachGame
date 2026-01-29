@@ -2026,7 +2026,7 @@ const SlimeSoccer = () => {
             <div className="flex justify-center w-full">
               <button
                 onClick={() => startGame('1min')}
-                className={`duration-button-large rounded ${lightButtonClasses}`}
+                className={`duration-button-large rounded duration-highlight ${lightButtonClasses}`}
               >
                 {t('oneMinute')}
               </button>

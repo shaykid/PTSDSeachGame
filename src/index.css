@@ -86,6 +86,24 @@ canvas {
   font-size: 1.875rem;
 }
 
+.duration-highlight {
+  position: relative;
+  animation: duration-highlight-pulse 1.2s ease-in-out infinite;
+  box-shadow: 0 0 14px rgba(74, 222, 128, 0.75), 0 0 28px rgba(34, 197, 94, 0.55);
+}
+
+@keyframes duration-highlight-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 10px rgba(74, 222, 128, 0.55), 0 0 20px rgba(34, 197, 94, 0.45);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(110, 231, 183, 0.95), 0 0 36px rgba(34, 197, 94, 0.75);
+    transform: scale(1.03);
+  }
+}
+
 .goal-celebration-text {
   font-family: 'Solitreo', cursive;
   animation: goal-text-run 3s linear;
