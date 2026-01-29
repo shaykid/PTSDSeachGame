@@ -2112,8 +2112,8 @@ const SlimeSoccer = () => {
         <div className="fixed inset-0 flex flex-col items-center justify-start bg-green-700">
           {!isLandscape && (
             <div className="absolute top-0 left-0 right-0 bg-green-800 px-8 py-4 w-full flex justify-between items-center z-10">
-              <span className="text-xl font-bold">{t('cyanTeam')}: {score.left}</span>
-              <span className="text-xl font-bold">{score.right} : {t('redTeam')}</span>
+              <span className="text-xl font-bold text-white text-left w-1/2">{t('cyanTeam')}</span>
+              <span className="text-xl font-bold text-white text-right w-1/2">{t('redTeam')}</span>
             </div>
           )}
           
