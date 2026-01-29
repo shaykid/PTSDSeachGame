@@ -2157,11 +2157,11 @@ const SlimeSoccer = () => {
           )}
 
           {showGoalCelebration && (
-            <div className="fixed inset-0 flex flex-col items-center justify-start pointer-events-none z-50">
+            <div className="fixed inset-0 flex flex-col items-center justify-center pointer-events-none z-50">
               <img
                 src={`${resourceBaseUrl}/ball1.gif`}
                 alt="Goal celebration"
-                className="goal-celebration-image"
+                className="w-48 h-auto"
               />
               <div
                 className="mt-4 text-green-700 font-bold goal-celebration-text"
