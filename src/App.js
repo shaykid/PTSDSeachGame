@@ -382,6 +382,10 @@ const SlimeSoccer = () => {
     return () => window.removeEventListener('resize', checkTouchSupport);
   }, []);
 
+  useEffect(() => {
+    console.log('[signaling] using url', signalingUrl);
+  }, [signalingUrl]);
+
   const pickRandomShape = useCallback((excludeShape) => {
     const available = AVAILABLE_SHAPES.filter((shape) => shape !== excludeShape);
     const pool = available.length ? available : AVAILABLE_SHAPES;
@@ -728,25 +732,45 @@ const SlimeSoccer = () => {
       return Promise.resolve();
     }
 
-    return new Promise((resolve) => {
+    if (!signalingUrl) {
+      console.error('[signaling] missing signaling url');
+      setConnectionStatus('failed');
+      return Promise.reject(new Error('Missing signaling URL'));
+    }
+
+    return new Promise((resolve, reject) => {
+      let settled = false;
       const socket = new WebSocket(signalingUrl);
       signalingSocketRef.current = socket;
 
       socket.onopen = () => {
+        if (settled) return;
+        settled = true;
         console.log('[signaling] socket connected');
         flushSignalingQueue();
         resolve();
       };
       socket.onmessage = handleSignalingMessage;
       socket.onerror = (error) => {
-        console.error('Signaling socket error:', error);
+        console.error('[signaling] socket error', error);
+        if (settled) return;
+        settled = true;
         setConnectionStatus('failed');
+        reject(error instanceof Error ? error : new Error('Signaling socket error'));
       };
-      socket.onclose = () => {
+      socket.onclose = (event) => {
+        console.warn('[signaling] socket closed', {
+          code: event.code,
+          reason: event.reason,
+          wasClean: event.wasClean,
+        });
+        if (settled) return;
+        settled = true;
         if (!remoteConnected) {
           console.warn('[signaling] socket closed before connection established');
           setConnectionStatus('failed');
         }
+        reject(new Error('Signaling socket closed before connection established'));
       };
     });
   }, [flushSignalingQueue, handleSignalingMessage, remoteConnected, signalingUrl]);
@@ -760,7 +784,13 @@ const SlimeSoccer = () => {
     setConnectionStatus('waiting');
     setPlayerMode('remote');
     setSelectionStep('remoteSetup');
-    await connectSignaling();
+    try {
+      await connectSignaling();
+    } catch (error) {
+      console.error('[remote] failed to connect signaling server', error);
+      setConnectionStatus('failed');
+      return;
+    }
     sendSignalingMessage({ type: 'host', roomId: newRoomId });
 
     const offer = await createOffer(newRoomId);
@@ -778,7 +808,13 @@ const SlimeSoccer = () => {
     setIsHost(false);
     setConnectionStatus('connecting');
     setPlayerMode('remote');
-    await connectSignaling();
+    try {
+      await connectSignaling();
+    } catch (error) {
+      console.error('[remote] failed to connect signaling server', error);
+      setConnectionStatus('failed');
+      return;
+    }
     sendSignalingMessage({ type: 'join', roomId: roomIdToJoin });
 
     setTimeout(() => {
