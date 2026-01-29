@@ -260,7 +260,7 @@ const SlimeSoccer = () => {
   const SLIME_RADIUS = playerSize / 1.3; // 2;
   const BALL_RADIUS = ballSize / 2;
   const GOAL_WIDTH = goalWidth;
-  const GOAL_HEIGHT = goalHeight * 2.5;
+  const GOAL_HEIGHT = goalHeight * 1.8;
   const computeStartPositions = useCallback(
     (fieldWidth) => {
       const leftX = Math.max(SLIME_RADIUS + 10, GOAL_WIDTH * 0.6);
