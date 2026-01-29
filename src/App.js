@@ -1730,14 +1730,14 @@ const SlimeSoccer = () => {
               />
             </div>
           )}
-          <div className="absolute top-0 left-0 right-0 flex justify-center z-10">
+          <div className="fixed top-0 left-0 right-0 flex justify-center z-10">
             <img
               src={`${resourceBaseUrl}/diamonds.png`}
               alt="Diamonds"
-              className="h-28 md:h-36 w-auto object-contain"
+              className="h-56 md:h-72 w-auto object-contain"
             />
           </div>
-          <div className="relative z-10 pt-32 md:pt-40">
+          <div className="relative z-10 pt-60 md:pt-72">
             <h1 className="text-5xl font-bold mb-6 text-green-300" style={{fontFamily: 'Arial, sans-serif'}}>
               {t('mainTitle')}
             </h1>
