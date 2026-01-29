@@ -3,8 +3,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 const TRANSLATIONS = {
   "he-IL": {
     "mainTitle": "משחק להרגעה ליהלומי קרב",
-    "gameTitle": "כדורגל טיפולי SeachTen",
-    "originalAuthor": "משחק טיפולי ללוחמי PTSD",
+    "gameTitle": "כדורגל טיפולי",
+    "originalAuthor": "משחק מותאם ללוחמי PTSD",
     "adaptedBy": "פותח באהבה על ידי Seach Medical Group",
     "singlePlayer": "שחקן בודד",
     "multiplayer": "שני שחקנים",
@@ -460,10 +460,10 @@ const SlimeSoccer = () => {
   const goalHeight = setSizeConfig?.goalpostPercent
     ? (setSizeConfig.goalpostPercent / 100) * GAME_HEIGHT
     : defaultGoalSize;
-  const SLIME_RADIUS = playerSize / 2;
+  const SLIME_RADIUS = playerSize / 1.3; // 2;
   const BALL_RADIUS = ballSize / 2;
   const GOAL_WIDTH = goalWidth;
-  const GOAL_HEIGHT = goalHeight;
+  const GOAL_HEIGHT = goalHeight * 1.8;
   const computeStartPositions = useCallback(
     (fieldWidth) => {
       const leftX = Math.max(SLIME_RADIUS + 10, GOAL_WIDTH * 0.6);
@@ -1078,6 +1078,13 @@ const SlimeSoccer = () => {
     };
   }, [displayHistoryImages, handleHistoryImageShown, resourceBaseUrl, selectionStep]);
 
+  const playGoalSound = useCallback(() => {
+    if (goalAudioRef.current) {
+      goalAudioRef.current.currentTime = 0;
+      goalAudioRef.current.play().catch(() => {});
+    }
+  }, []);
+
   const triggerGoalCelebration = useCallback(() => {
     if (goalTimeoutRef.current) {
       clearTimeout(goalTimeoutRef.current);
@@ -1086,10 +1093,6 @@ const SlimeSoccer = () => {
     goalTimeoutRef.current = setTimeout(() => {
       setShowGoalCelebration(false);
     }, 1000);
-    if (goalAudioRef.current) {
-      goalAudioRef.current.currentTime = 0;
-      goalAudioRef.current.play().catch(() => {});
-    }
   }, []);
   
   const drawCannabisLeaf = (ctx, x, y, size) => {
@@ -1177,7 +1180,8 @@ const SlimeSoccer = () => {
       vy: 0,
       grabbedBy: null,
       grabAngle: 0,
-      grabAngularVelocity: 0
+      grabAngularVelocity: 0,
+      haltedUntil: 0
     }
   });
 
@@ -1279,6 +1283,7 @@ const SlimeSoccer = () => {
     state.ball.grabbedBy = null;
     state.ball.grabAngle = 0;
     state.ball.grabAngularVelocity = 0;
+    state.ball.haltedUntil = Date.now() + 2000; // 2 second delay before ball starts
   };
 
   const resetGame = () => {
@@ -1647,78 +1652,80 @@ const SlimeSoccer = () => {
       const inOwnGoalArea = (isLeftSlime && slime.x < GOAL_WIDTH) || (!isLeftSlime && slime.x > GAME_WIDTH - GOAL_WIDTH);
       
       if (inOwnGoalArea) {
-        slime.goalLineTime += 1/60;
-        
-        if (slime.goalLineTime >= 1) {
-          if (isLeftSlime) {
-            setScore(prev => ({ ...prev, right: prev.right + 1 }));
-          } else {
-            setScore(prev => ({ ...prev, left: prev.left + 1 }));
-          }
-          resetPositions();
-        }
+        slime.goalLineTime = Math.min(slime.goalLineTime + 1/60, 1);
       } else {
         slime.goalLineTime = 0;
       }
     });
     
-    if (state.ball.grabbedBy) {
-      const grabber = state.ball.grabbedBy === 'left' ? state.leftSlime : state.rightSlime;
-      const slimeDirection = state.ball.grabbedBy === 'left' ? 1 : -1;
-      
-      state.ball.grabAngularVelocity += -grabber.vx * 0.008 * slimeDirection;
-      
-      state.ball.grabAngularVelocity *= 0.85;
-      state.ball.grabAngle += state.ball.grabAngularVelocity;
-      
-      if (state.ball.grabbedBy === 'left') {
-        if (state.ball.grabAngle < -Math.PI / 2) {
-          state.ball.grabAngle = -Math.PI / 2;
+    // Check if ball is halted (2 second delay before ball starts moving)
+    const ballIsHalted = Date.now() < state.ball.haltedUntil;
+
+    if (!ballIsHalted) {
+      if (state.ball.grabbedBy) {
+        const grabber = state.ball.grabbedBy === 'left' ? state.leftSlime : state.rightSlime;
+        const slimeDirection = state.ball.grabbedBy === 'left' ? 1 : -1;
+
+        state.ball.grabAngularVelocity += -grabber.vx * 0.008 * slimeDirection;
+
+        state.ball.grabAngularVelocity *= 0.85;
+        state.ball.grabAngle += state.ball.grabAngularVelocity;
+
+        if (state.ball.grabbedBy === 'left') {
+          if (state.ball.grabAngle < -Math.PI / 2) {
+            state.ball.grabAngle = -Math.PI / 2;
+            state.ball.grabAngularVelocity = 0;
+          } else if (state.ball.grabAngle > Math.PI / 2) {
+            state.ball.grabAngle = Math.PI / 2;
+            state.ball.grabAngularVelocity = 0;
+          }
+        } else {
+          while (state.ball.grabAngle < 0) state.ball.grabAngle += Math.PI * 2;
+          while (state.ball.grabAngle > Math.PI * 2) state.ball.grabAngle -= Math.PI * 2;
+
+          if (state.ball.grabAngle < Math.PI / 2 && state.ball.grabAngle >= 0) {
+            state.ball.grabAngle = Math.PI / 2;
+            state.ball.grabAngularVelocity = 0;
+          } else if (state.ball.grabAngle > 3 * Math.PI / 2 ||
+                     (state.ball.grabAngle < Math.PI / 2 && state.ball.grabAngle < 0)) {
+            state.ball.grabAngle = 3 * Math.PI / 2;
+            state.ball.grabAngularVelocity = 0;
+          }
+        }
+
+        const holdDistance = SLIME_RADIUS + BALL_RADIUS - 5;
+        state.ball.x = grabber.x + Math.cos(state.ball.grabAngle) * holdDistance;
+        state.ball.y = grabber.y + Math.sin(state.ball.grabAngle) * holdDistance;
+
+        state.ball.vx = grabber.vx;
+        state.ball.vy = grabber.vy;
+
+        if (!grabber.isGrabbing) {
+          const releaseAngle = state.ball.grabAngle;
+          const releaseSpeed = Math.abs(state.ball.grabAngularVelocity) * 20;
+          state.ball.vx = (
+            grabber.vx * 1.5 + Math.cos(releaseAngle) * (3 + releaseSpeed)
+          ) * BALL_SPEED_MULTIPLIER;
+          state.ball.vy = (
+            grabber.vy - 2 + Math.sin(releaseAngle) * releaseSpeed * 0.3
+          ) * BALL_SPEED_MULTIPLIER;
+          state.ball.grabbedBy = null;
+          state.ball.grabAngle = 0;
           state.ball.grabAngularVelocity = 0;
-        } else if (state.ball.grabAngle > Math.PI / 2) {
-          state.ball.grabAngle = Math.PI / 2;
-          state.ball.grabAngularVelocity = 0;
+          grabber.hasBall = false;
         }
       } else {
-        while (state.ball.grabAngle < 0) state.ball.grabAngle += Math.PI * 2;
-        while (state.ball.grabAngle > Math.PI * 2) state.ball.grabAngle -= Math.PI * 2;
-        
-        if (state.ball.grabAngle < Math.PI / 2 && state.ball.grabAngle >= 0) {
-          state.ball.grabAngle = Math.PI / 2;
-          state.ball.grabAngularVelocity = 0;
-        } else if (state.ball.grabAngle > 3 * Math.PI / 2 || 
-                   (state.ball.grabAngle < Math.PI / 2 && state.ball.grabAngle < 0)) {
-          state.ball.grabAngle = 3 * Math.PI / 2;
-          state.ball.grabAngularVelocity = 0;
+        state.ball.vy += BALL_GRAVITY;
+        state.ball.vx *= BALL_DAMPING;
+        state.ball.x += state.ball.vx;
+        state.ball.y += state.ball.vy;
+
+        // Random horizontal shift while falling (±10-40 pixels, ~3% chance per frame)
+        if (state.ball.vy > 0 && Math.random() < 0.03) {
+          const shiftAmount = (10 + Math.random() * 30) * (Math.random() < 0.5 ? -1 : 1);
+          state.ball.x += shiftAmount;
         }
       }
-      
-      const holdDistance = SLIME_RADIUS + BALL_RADIUS - 5;
-      state.ball.x = grabber.x + Math.cos(state.ball.grabAngle) * holdDistance;
-      state.ball.y = grabber.y + Math.sin(state.ball.grabAngle) * holdDistance;
-      
-      state.ball.vx = grabber.vx;
-      state.ball.vy = grabber.vy;
-      
-      if (!grabber.isGrabbing) {
-        const releaseAngle = state.ball.grabAngle;
-        const releaseSpeed = Math.abs(state.ball.grabAngularVelocity) * 20;
-        state.ball.vx = (
-          grabber.vx * 1.5 + Math.cos(releaseAngle) * (3 + releaseSpeed)
-        ) * BALL_SPEED_MULTIPLIER;
-        state.ball.vy = (
-          grabber.vy - 2 + Math.sin(releaseAngle) * releaseSpeed * 0.3
-        ) * BALL_SPEED_MULTIPLIER;
-        state.ball.grabbedBy = null;
-        state.ball.grabAngle = 0;
-        state.ball.grabAngularVelocity = 0;
-        grabber.hasBall = false;
-      }
-    } else {
-      state.ball.vy += BALL_GRAVITY;
-      state.ball.vx *= BALL_DAMPING;
-      state.ball.x += state.ball.vx;
-      state.ball.y += state.ball.vy;
     }
     
     if (state.ball.x < BALL_RADIUS) {
@@ -1736,10 +1743,12 @@ const SlimeSoccer = () => {
     }
     
     if (state.ball.x <= BALL_RADIUS && state.ball.y > GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT) {
+      playGoalSound();
       triggerGoalCelebration();
       setScore(prev => ({ ...prev, right: prev.right + 1 }));
       resetPositions();
     } else if (state.ball.x >= GAME_WIDTH - BALL_RADIUS && state.ball.y > GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT) {
+      playGoalSound();
       triggerGoalCelebration();
       setScore(prev => ({ ...prev, left: prev.left + 1 }));
       resetPositions();
@@ -1750,61 +1759,64 @@ const SlimeSoccer = () => {
       state.ball.vy = -state.ball.vy * BALL_BOUNCE_DAMPING;
     }
     
-    [state.leftSlime, state.rightSlime].forEach((slime, index) => {
-      const slimeName = index === 0 ? 'left' : 'right';
-      const otherSlime = index === 0 ? state.rightSlime : state.leftSlime;
-      const dx = state.ball.x - slime.x;
-      const dy = state.ball.y - slime.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      
-      if (distance < SLIME_RADIUS + BALL_RADIUS) {
-        if (state.ball.grabbedBy && state.ball.grabbedBy !== slimeName) {
-          const angle = Math.atan2(dy, dx);
-          const speed = Math.sqrt(slime.vx * slime.vx + slime.vy * slime.vy);
-          
-          if (speed > 2 || Math.abs(slime.vy) > 5) {
-            state.ball.grabbedBy = null;
-            state.ball.grabAngle = 0;
-            state.ball.grabAngularVelocity = 0;
-            otherSlime.hasBall = false;
-            
-            state.ball.vx = (Math.cos(angle) * 8 + slime.vx) * BALL_SPEED_MULTIPLIER;
-            state.ball.vy = (Math.sin(angle) * 8 + slime.vy) * BALL_SPEED_MULTIPLIER;
+    // Only allow ball-slime collision when ball is not halted
+    if (!ballIsHalted) {
+      [state.leftSlime, state.rightSlime].forEach((slime, index) => {
+        const slimeName = index === 0 ? 'left' : 'right';
+        const otherSlime = index === 0 ? state.rightSlime : state.leftSlime;
+        const dx = state.ball.x - slime.x;
+        const dy = state.ball.y - slime.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance < SLIME_RADIUS + BALL_RADIUS) {
+          if (state.ball.grabbedBy && state.ball.grabbedBy !== slimeName) {
+            const angle = Math.atan2(dy, dx);
+            const speed = Math.sqrt(slime.vx * slime.vx + slime.vy * slime.vy);
+
+            if (speed > 2 || Math.abs(slime.vy) > 5) {
+              state.ball.grabbedBy = null;
+              state.ball.grabAngle = 0;
+              state.ball.grabAngularVelocity = 0;
+              otherSlime.hasBall = false;
+
+              state.ball.vx = (Math.cos(angle) * 8 + slime.vx) * BALL_SPEED_MULTIPLIER;
+              state.ball.vy = (Math.sin(angle) * 8 + slime.vy) * BALL_SPEED_MULTIPLIER;
+            }
           }
-        }
-        else if (slime.isGrabbing && !state.ball.grabbedBy) {
-          state.ball.grabbedBy = slimeName;
-          state.ball.grabAngle = Math.atan2(dy, dx);
-          state.ball.grabAngularVelocity = 0;
-          slime.hasBall = true;
-        } 
-        else if (!state.ball.grabbedBy) {
-          const angle = Math.atan2(dy, dx);
-          const targetX = slime.x + Math.cos(angle) * (SLIME_RADIUS + BALL_RADIUS);
-          const targetY = slime.y + Math.sin(angle) * (SLIME_RADIUS + BALL_RADIUS);
-          
-          if (state.ball.y < slime.y || Math.abs(angle) < Math.PI * 0.5) {
-            state.ball.x = targetX;
-            state.ball.y = targetY;
-            
-            const speed = Math.sqrt(state.ball.vx * state.ball.vx + state.ball.vy * state.ball.vy);
-            state.ball.vx = (
-              Math.cos(angle) * speed * 1.5 + slime.vx * 0.5
-            ) * BALL_SPEED_MULTIPLIER;
-            state.ball.vy = (
-              Math.sin(angle) * speed * 1.5 + slime.vy * 0.5
-            ) * BALL_SPEED_MULTIPLIER;
-            
-            const newSpeed = Math.sqrt(state.ball.vx * state.ball.vx + state.ball.vy * state.ball.vy);
-            if (newSpeed > MAX_BALL_SPEED) {
-              const scale = MAX_BALL_SPEED / newSpeed;
-              state.ball.vx *= scale;
-              state.ball.vy *= scale;
+          else if (slime.isGrabbing && !state.ball.grabbedBy) {
+            state.ball.grabbedBy = slimeName;
+            state.ball.grabAngle = Math.atan2(dy, dx);
+            state.ball.grabAngularVelocity = 0;
+            slime.hasBall = true;
+          }
+          else if (!state.ball.grabbedBy) {
+            const angle = Math.atan2(dy, dx);
+            const targetX = slime.x + Math.cos(angle) * (SLIME_RADIUS + BALL_RADIUS);
+            const targetY = slime.y + Math.sin(angle) * (SLIME_RADIUS + BALL_RADIUS);
+
+            if (state.ball.y < slime.y || Math.abs(angle) < Math.PI * 0.5) {
+              state.ball.x = targetX;
+              state.ball.y = targetY;
+
+              const speed = Math.sqrt(state.ball.vx * state.ball.vx + state.ball.vy * state.ball.vy);
+              state.ball.vx = (
+                Math.cos(angle) * speed * 1.5 + slime.vx * 0.5
+              ) * BALL_SPEED_MULTIPLIER;
+              state.ball.vy = (
+                Math.sin(angle) * speed * 1.5 + slime.vy * 0.5
+              ) * BALL_SPEED_MULTIPLIER;
+
+              const newSpeed = Math.sqrt(state.ball.vx * state.ball.vx + state.ball.vy * state.ball.vy);
+              if (newSpeed > MAX_BALL_SPEED) {
+                const scale = MAX_BALL_SPEED / newSpeed;
+                state.ball.vx *= scale;
+                state.ball.vy *= scale;
+              }
             }
           }
         }
-      }
-    });
+      });
+    }
   }, [
     BALL_RADIUS,
     GAME_HEIGHT,
@@ -1814,6 +1826,7 @@ const SlimeSoccer = () => {
     SLIME_RADIUS,
     isHost,
     playerMode,
+    playGoalSound,
     triggerGoalCelebration,
     updateAI,
   ]);
@@ -2197,6 +2210,25 @@ const SlimeSoccer = () => {
       ctx.lineTo(GAME_WIDTH, j);
       ctx.stroke();
     }
+
+    const getScoreColor = (currentScore, opponentScore) => {
+      if (currentScore === opponentScore) {
+        return '#FFFFFF';
+      }
+      return currentScore > opponentScore ? '#0f4f1c' : '#4b4b4b';
+    };
+
+    const drawScoreAboveGoal = (goalCenterX, currentScore, opponentScore) => {
+      const scoreY = GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT - 24;
+      ctx.font = 'bold 28px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = getScoreColor(currentScore, opponentScore);
+      ctx.fillText(String(currentScore), goalCenterX, scoreY);
+    };
+
+    drawScoreAboveGoal(GOAL_WIDTH / 2, score.left, score.right);
+    drawScoreAboveGoal(GAME_WIDTH - GOAL_WIDTH / 2, score.right, score.left);
     
     // Draw goal line timers
     const drawGoalLineTimer = (slime, goalX, goalWidth) => {
@@ -2252,7 +2284,7 @@ const SlimeSoccer = () => {
     // Draw ball
     const ballType = selectedBall || 'cannabis';
     drawBall(ctx, state.ball.x, state.ball.y, BALL_RADIUS, ballType);
-  }, [GAME_HEIGHT, GAME_WIDTH, selectedShapes, selectedBall]);
+  }, [GAME_HEIGHT, GAME_WIDTH, GOAL_HEIGHT, GOAL_WIDTH, GROUND_HEIGHT, score, selectedShapes, selectedBall]);
 
   const gameLoop = useCallback((currentTime) => {
     if (gameStarted) {
@@ -2333,7 +2365,7 @@ const SlimeSoccer = () => {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen w-screen bg-green-700 text-gray-900 p-4" dir="rtl">
       {selectionStep === 'mode' && (
-        <div className="text-center relative">
+        <div className="text-center relative w-full">
           {displayHistoryImages && historyOverlay.src && (
             <div className="fixed inset-0 pointer-events-none z-0">
               <img
@@ -2341,19 +2373,27 @@ const SlimeSoccer = () => {
                 alt=""
                 className="absolute"
                 style={{
-                  width: '30vw',
-                  height: '30vh',
+                  width: '30vmin',
+                  height: '30vmin',
                   left: `${historyOverlay.position.x}%`,
                   top: `${historyOverlay.position.y}%`,
                   transform: 'translate(-50%, -50%)',
-                  objectFit: 'contain',
+                  objectFit: 'cover',
+                  borderRadius: '9999px',
                   opacity: historyOverlay.visible ? 0.6 : 0,
                   transition: 'opacity 0.2s ease-in-out'
                 }}
               />
             </div>
           )}
-          <div className="relative z-10">
+          <div className="fixed top-0 left-0 right-0 flex justify-center z-10">
+            <img
+              src={`${resourceBaseUrl}/diamonds.png`}
+              alt="Diamonds"
+              className="h-56 md:h-72 w-auto object-contain"
+            />
+          </div>
+          <div className="relative z-10 pt-60 md:pt-72">
             <h1 className="text-5xl font-bold mb-6 text-green-300" style={{fontFamily: 'Arial, sans-serif'}}>
               {t('mainTitle')}
             </h1>
@@ -2519,55 +2559,109 @@ const SlimeSoccer = () => {
             <ShapeButton
               shape="helmetCamo"
               label={t('helmetCamo')}
-              onClick={() => setSelectedShapes({
-                ...selectedShapes,
-                [playerMode === 'single' ? 'right' : 'left']: 'helmetCamo',
-              })}
+              onClick={() => {
+                setSelectedShapes((prev) => {
+                  const key = playerMode === 'single' ? 'right' : 'left';
+                  const next = { ...prev, [key]: 'helmetCamo' };
+                  if (playerMode === 'single') {
+                    next.left = pickRandomShape('helmetCamo');
+                  }
+                  return next;
+                });
+                if (playerMode === 'single') {
+                  setSelectionStep('ball');
+                }
+              }}
               selected={(playerMode === 'single' ? selectedShapes.right : selectedShapes.left) === 'helmetCamo'}
             />
             <ShapeButton
               shape="helmetDesert"
               label={t('helmetDesert')}
-              onClick={() => setSelectedShapes({
-                ...selectedShapes,
-                [playerMode === 'single' ? 'right' : 'left']: 'helmetDesert',
-              })}
+              onClick={() => {
+                setSelectedShapes((prev) => {
+                  const key = playerMode === 'single' ? 'right' : 'left';
+                  const next = { ...prev, [key]: 'helmetDesert' };
+                  if (playerMode === 'single') {
+                    next.left = pickRandomShape('helmetDesert');
+                  }
+                  return next;
+                });
+                if (playerMode === 'single') {
+                  setSelectionStep('ball');
+                }
+              }}
               selected={(playerMode === 'single' ? selectedShapes.right : selectedShapes.left) === 'helmetDesert'}
             />
             <ShapeButton
               shape="helmetUrban"
               label={t('helmetUrban')}
-              onClick={() => setSelectedShapes({
-                ...selectedShapes,
-                [playerMode === 'single' ? 'right' : 'left']: 'helmetUrban',
-              })}
+              onClick={() => {
+                setSelectedShapes((prev) => {
+                  const key = playerMode === 'single' ? 'right' : 'left';
+                  const next = { ...prev, [key]: 'helmetUrban' };
+                  if (playerMode === 'single') {
+                    next.left = pickRandomShape('helmetUrban');
+                  }
+                  return next;
+                });
+                if (playerMode === 'single') {
+                  setSelectionStep('ball');
+                }
+              }}
               selected={(playerMode === 'single' ? selectedShapes.right : selectedShapes.left) === 'helmetUrban'}
             />
             <ShapeButton
               shape="labrador"
               label={t('labrador')}
-              onClick={() => setSelectedShapes({
-                ...selectedShapes,
-                [playerMode === 'single' ? 'right' : 'left']: 'labrador',
-              })}
+              onClick={() => {
+                setSelectedShapes((prev) => {
+                  const key = playerMode === 'single' ? 'right' : 'left';
+                  const next = { ...prev, [key]: 'labrador' };
+                  if (playerMode === 'single') {
+                    next.left = pickRandomShape('labrador');
+                  }
+                  return next;
+                });
+                if (playerMode === 'single') {
+                  setSelectionStep('ball');
+                }
+              }}
               selected={(playerMode === 'single' ? selectedShapes.right : selectedShapes.left) === 'labrador'}
             />
             <ShapeButton
               shape="tank"
               label={t('tank')}
-              onClick={() => setSelectedShapes({
-                ...selectedShapes,
-                [playerMode === 'single' ? 'right' : 'left']: 'tank',
-              })}
+              onClick={() => {
+                setSelectedShapes((prev) => {
+                  const key = playerMode === 'single' ? 'right' : 'left';
+                  const next = { ...prev, [key]: 'tank' };
+                  if (playerMode === 'single') {
+                    next.left = pickRandomShape('tank');
+                  }
+                  return next;
+                });
+                if (playerMode === 'single') {
+                  setSelectionStep('ball');
+                }
+              }}
               selected={(playerMode === 'single' ? selectedShapes.right : selectedShapes.left) === 'tank'}
             />
             <ShapeButton
               shape="sunflower"
               label={t('sunflower')}
-              onClick={() => setSelectedShapes({
-                ...selectedShapes,
-                [playerMode === 'single' ? 'right' : 'left']: 'sunflower',
-              })}
+              onClick={() => {
+                setSelectedShapes((prev) => {
+                  const key = playerMode === 'single' ? 'right' : 'left';
+                  const next = { ...prev, [key]: 'sunflower' };
+                  if (playerMode === 'single') {
+                    next.left = pickRandomShape('sunflower');
+                  }
+                  return next;
+                });
+                if (playerMode === 'single') {
+                  setSelectionStep('ball');
+                }
+              }}
               selected={(playerMode === 'single' ? selectedShapes.right : selectedShapes.left) === 'sunflower'}
             />
           </div>
@@ -2576,43 +2670,79 @@ const SlimeSoccer = () => {
             <>
               <p className="mb-4 text-gray-300 mt-6">{t('player2')}</p>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-                <ShapeButton
-                  shape="helmetCamo"
-                  label={t('helmetCamo')}
-                  onClick={() => setSelectedShapes({...selectedShapes, right: 'helmetCamo'})}
-                  selected={selectedShapes.right === 'helmetCamo'}
-                />
-                <ShapeButton
-                  shape="helmetDesert"
-                  label={t('helmetDesert')}
-                  onClick={() => setSelectedShapes({...selectedShapes, right: 'helmetDesert'})}
-                  selected={selectedShapes.right === 'helmetDesert'}
-                />
-                <ShapeButton
-                  shape="helmetUrban"
-                  label={t('helmetUrban')}
-                  onClick={() => setSelectedShapes({...selectedShapes, right: 'helmetUrban'})}
-                  selected={selectedShapes.right === 'helmetUrban'}
-                />
-                <ShapeButton
-                  shape="labrador"
-                  label={t('labrador')}
-                  onClick={() => setSelectedShapes({...selectedShapes, right: 'labrador'})}
-                  selected={selectedShapes.right === 'labrador'}
-                />
-                <ShapeButton
-                  shape="tank"
-                  label={t('tank')}
-                  onClick={() => setSelectedShapes({...selectedShapes, right: 'tank'})}
-                  selected={selectedShapes.right === 'tank'}
-                />
-                <ShapeButton
-                  shape="sunflower"
-                  label={t('sunflower')}
-                  onClick={() => setSelectedShapes({...selectedShapes, right: 'sunflower'})}
-                  selected={selectedShapes.right === 'sunflower'}
-                />
-              </div>
+            <ShapeButton
+              shape="helmetCamo"
+              label={t('helmetCamo')}
+              onClick={() => {
+                setSelectedShapes((prev) => ({
+                  ...prev,
+                  right: 'helmetCamo',
+                }));
+                setSelectionStep('ball');
+              }}
+              selected={selectedShapes.right === 'helmetCamo'}
+            />
+            <ShapeButton
+              shape="helmetDesert"
+              label={t('helmetDesert')}
+              onClick={() => {
+                setSelectedShapes((prev) => ({
+                  ...prev,
+                  right: 'helmetDesert',
+                }));
+                setSelectionStep('ball');
+              }}
+              selected={selectedShapes.right === 'helmetDesert'}
+            />
+            <ShapeButton
+              shape="helmetUrban"
+              label={t('helmetUrban')}
+              onClick={() => {
+                setSelectedShapes((prev) => ({
+                  ...prev,
+                  right: 'helmetUrban',
+                }));
+                setSelectionStep('ball');
+              }}
+              selected={selectedShapes.right === 'helmetUrban'}
+            />
+            <ShapeButton
+              shape="labrador"
+              label={t('labrador')}
+              onClick={() => {
+                setSelectedShapes((prev) => ({
+                  ...prev,
+                  right: 'labrador',
+                }));
+                setSelectionStep('ball');
+              }}
+              selected={selectedShapes.right === 'labrador'}
+            />
+            <ShapeButton
+              shape="tank"
+              label={t('tank')}
+              onClick={() => {
+                setSelectedShapes((prev) => ({
+                  ...prev,
+                  right: 'tank',
+                }));
+                setSelectionStep('ball');
+              }}
+              selected={selectedShapes.right === 'tank'}
+            />
+            <ShapeButton
+              shape="sunflower"
+              label={t('sunflower')}
+              onClick={() => {
+                setSelectedShapes((prev) => ({
+                  ...prev,
+                  right: 'sunflower',
+                }));
+                setSelectionStep('ball');
+              }}
+              selected={selectedShapes.right === 'sunflower'}
+            />
+          </div>
             </>
           )}
           
@@ -2626,23 +2756,6 @@ const SlimeSoccer = () => {
             >
               {t('backButton')}
             </button>
-            {((playerMode === 'single' && selectedShapes.right) || 
-              (playerMode === 'multi' && selectedShapes.left && selectedShapes.right)) && (
-              <button
-                onClick={() => {
-                  if (playerMode === 'single') {
-                    setSelectedShapes((prev) => ({
-                      ...prev,
-                      left: pickRandomShape(prev.right),
-                    }));
-                  }
-                  setSelectionStep('ball');
-                }}
-                className={`px-6 py-3 rounded ${lightButtonClasses}`}
-              >
-                {t('nextButton')}
-              </button>
-            )}
           </div>
         </div>
       )}
@@ -2655,19 +2768,28 @@ const SlimeSoccer = () => {
             <ShapeButton
               shape="grenade"
               label={t('grenade')}
-              onClick={() => setSelectedBall('grenade')}
+              onClick={() => {
+                setSelectedBall('grenade');
+                setSelectionStep('duration');
+              }}
               selected={selectedBall === 'grenade'}
             />
             <ShapeButton
               shape="pill"
               label={t('pill')}
-              onClick={() => setSelectedBall('pill')}
+              onClick={() => {
+                setSelectedBall('pill');
+                setSelectionStep('duration');
+              }}
               selected={selectedBall === 'pill'}
             />
             <ShapeButton
               shape="cannabis"
               label={t('cannabis')}
-              onClick={() => setSelectedBall('cannabis')}
+              onClick={() => {
+                setSelectedBall('cannabis');
+                setSelectionStep('duration');
+              }}
               selected={selectedBall === 'cannabis'}
             />
           </div>
@@ -2682,14 +2804,6 @@ const SlimeSoccer = () => {
             >
               {t('backButton')}
             </button>
-            {selectedBall && (
-              <button
-                onClick={() => setSelectionStep('duration')}
-                className={`px-6 py-3 rounded ${lightButtonClasses}`}
-              >
-                {t('nextButton')}
-              </button>
-            )}
           </div>
         </div>
       )}
@@ -2708,7 +2822,7 @@ const SlimeSoccer = () => {
             <div className="flex justify-center w-full">
               <button
                 onClick={() => startGame('1min')}
-                className={`duration-button-large rounded ${lightButtonClasses}`}
+                className={`duration-button-large rounded duration-highlight ${lightButtonClasses}`}
               >
                 {t('oneMinute')}
               </button>
@@ -2772,20 +2886,24 @@ const SlimeSoccer = () => {
           {!isLandscape && (
             <div className="absolute top-0 left-0 right-0 bg-green-800 px-8 py-4 w-full flex justify-between items-center z-10">
               <span className="text-xl font-bold">{t('cyanTeam')}: {score.left}</span>
-              <span className="text-2xl font-mono">{formatTime(timeLeft)}</span>
               <span className="text-xl font-bold">{score.right} : {t('redTeam')}</span>
             </div>
           )}
           
-          <canvas
-            ref={canvasRef}
-            width={GAME_WIDTH}
-            height={GAME_HEIGHT}
-            className="border-4 border-green-700 w-full h-full game-canvas"
-          />
+          <div className="relative w-full h-full">
+            <div className="absolute top-2 left-1/2 z-10 -translate-x-1/2 game-timer">
+              {formatTime(timeLeft)}
+            </div>
+            <canvas
+              ref={canvasRef}
+              width={GAME_WIDTH}
+              height={GAME_HEIGHT}
+              className="border-4 border-green-700 w-full h-full game-canvas"
+            />
+          </div>
 
           {gameStarted && isTouchDevice && (
-            <div className="touch-controls">
+            <div className={`touch-controls${playerMode === 'multi' ? '' : ' touch-controls-centered'}`}>
               <div className="touch-group">
                 <div className="touch-row">
                   <TouchButton label="↑" actionKey="arrowup" />
