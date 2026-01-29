@@ -504,10 +504,9 @@ const SlimeSoccer = () => {
 
   // Generate join URL for remote multiplayer
   const getJoinUrl = useCallback((roomIdToUse) => {
-    const url = new URL(window.location.href);
-    url.searchParams.set('room', roomIdToUse);
-    url.hash = '';
-    return url.toString();
+    const baseUrl = new URL(`${window.location.origin}${window.location.pathname}`);
+    baseUrl.searchParams.set('room', roomIdToUse);
+    return baseUrl.toString();
   }, []);
 
   // QR code data URL
@@ -555,8 +554,10 @@ const SlimeSoccer = () => {
     const socket = signalingSocketRef.current;
     const payload = JSON.stringify(message);
     if (socket && socket.readyState === WebSocket.OPEN) {
+      console.log('[signaling] sending message', message.type, message.roomId);
       socket.send(payload);
     } else {
+      console.warn('[signaling] socket not ready, queueing', message.type, message.roomId);
       signalingQueueRef.current.push(payload);
     }
   }, []);
@@ -782,6 +783,7 @@ const SlimeSoccer = () => {
   const handleSignalingMessage = useCallback(async (event) => {
     try {
       const message = JSON.parse(event.data);
+      console.log('[signaling] received message', message.type, message.roomId);
       if (message.type === 'offer' && !isHost) {
         const answer = await createAnswer(message.offer);
         if (answer) {
@@ -795,8 +797,10 @@ const SlimeSoccer = () => {
           await pc.addIceCandidate(new RTCIceCandidate(message.candidate));
         }
       } else if (message.type === 'roomFull') {
+        console.warn('[signaling] room full');
         setConnectionStatus('failed');
       } else if (message.type === 'peerLeft') {
+        console.warn('[signaling] peer left');
         setConnectionStatus('failed');
         setRemoteConnected(false);
       }
@@ -816,6 +820,7 @@ const SlimeSoccer = () => {
       signalingSocketRef.current = socket;
 
       socket.onopen = () => {
+        console.log('[signaling] socket connected');
         flushSignalingQueue();
         resolve();
       };
@@ -826,6 +831,7 @@ const SlimeSoccer = () => {
       };
       socket.onclose = () => {
         if (!remoteConnected) {
+          console.warn('[signaling] socket closed before connection established');
           setConnectionStatus('failed');
         }
       };
@@ -835,6 +841,7 @@ const SlimeSoccer = () => {
   // Start hosting a remote game
   const startHosting = useCallback(async () => {
     const newRoomId = generateRoomId();
+    console.log('[remote] start hosting', newRoomId);
     setRoomId(newRoomId);
     setIsHost(true);
     setConnectionStatus('waiting');
@@ -846,11 +853,14 @@ const SlimeSoccer = () => {
     const offer = await createOffer(newRoomId);
     if (offer) {
       sendSignalingMessage({ type: 'offer', roomId: newRoomId, offer });
+    } else {
+      console.warn('[remote] failed to create offer');
     }
   }, [connectSignaling, createOffer, sendSignalingMessage]);
 
   // Join a remote game
   const joinGame = useCallback(async (roomIdToJoin) => {
+    console.log('[remote] join game', roomIdToJoin);
     setRoomId(roomIdToJoin);
     setIsHost(false);
     setConnectionStatus('connecting');
@@ -860,6 +870,7 @@ const SlimeSoccer = () => {
 
     setTimeout(() => {
       if (connectionStatus === 'connecting') {
+        console.warn('[remote] connection timed out');
         setConnectionStatus('failed');
       }
     }, 30000);
