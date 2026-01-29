@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import QRCode from 'qrcode';
 
 const TRANSLATIONS = {
   "he-IL": {
@@ -125,149 +126,6 @@ const AVAILABLE_SHAPES = [
   'sunflower',
 ];
 
-// Simple QR Code generator (QR Code Model 2, Version 1-4 for short URLs)
-const generateQRCode = (text, size = 200) => {
-  // QR Code encoding tables
-  const EC_CODEWORDS = { L: [7, 10, 15, 20], M: [10, 16, 26, 36], Q: [13, 22, 36, 52], H: [17, 28, 44, 64] };
-  const CAPACITY = { L: [17, 32, 53, 78], M: [14, 26, 42, 62], Q: [11, 20, 32, 46], H: [7, 14, 24, 34] };
-  const ALIGNMENT = [[], [6, 18], [6, 22], [6, 26]];
-
-  const ecLevel = 'M';
-  let version = 1;
-  for (let v = 1; v <= 4; v++) {
-    if (text.length <= CAPACITY[ecLevel][v - 1]) {
-      version = v;
-      break;
-    }
-  }
-
-  const moduleCount = version * 4 + 17;
-  const modules = Array(moduleCount).fill(null).map(() => Array(moduleCount).fill(null));
-
-  // Position patterns
-  const drawFinderPattern = (row, col) => {
-    for (let r = -1; r <= 7; r++) {
-      for (let c = -1; c <= 7; c++) {
-        const rr = row + r, cc = col + c;
-        if (rr < 0 || rr >= moduleCount || cc < 0 || cc >= moduleCount) continue;
-        if ((r >= 0 && r <= 6 && (c === 0 || c === 6)) ||
-            (c >= 0 && c <= 6 && (r === 0 || r === 6)) ||
-            (r >= 2 && r <= 4 && c >= 2 && c <= 4)) {
-          modules[rr][cc] = true;
-        } else {
-          modules[rr][cc] = false;
-        }
-      }
-    }
-  };
-
-  drawFinderPattern(0, 0);
-  drawFinderPattern(0, moduleCount - 7);
-  drawFinderPattern(moduleCount - 7, 0);
-
-  // Timing patterns
-  for (let i = 8; i < moduleCount - 8; i++) {
-    modules[6][i] = modules[i][6] = i % 2 === 0;
-  }
-
-  // Dark module
-  modules[moduleCount - 8][8] = true;
-
-  // Reserve format info areas
-  for (let i = 0; i < 9; i++) {
-    if (modules[8][i] === null) modules[8][i] = false;
-    if (modules[i][8] === null) modules[i][8] = false;
-    if (i < 8) {
-      if (modules[8][moduleCount - 1 - i] === null) modules[8][moduleCount - 1 - i] = false;
-      if (modules[moduleCount - 1 - i][8] === null) modules[moduleCount - 1 - i][8] = false;
-    }
-  }
-
-  // Alignment patterns for version 2+
-  if (version >= 2) {
-    const positions = ALIGNMENT[version - 1];
-    for (const row of positions) {
-      for (const col of positions) {
-        if (modules[row][col] !== null) continue;
-        for (let r = -2; r <= 2; r++) {
-          for (let c = -2; c <= 2; c++) {
-            modules[row + r][col + c] = Math.abs(r) === 2 || Math.abs(c) === 2 || (r === 0 && c === 0);
-          }
-        }
-      }
-    }
-  }
-
-  // Encode data (byte mode)
-  let bits = '0100'; // Byte mode indicator
-  const charCountBits = version < 10 ? 8 : 16;
-  bits += text.length.toString(2).padStart(charCountBits, '0');
-  for (let i = 0; i < text.length; i++) {
-    bits += text.charCodeAt(i).toString(2).padStart(8, '0');
-  }
-
-  // Add terminator and pad
-  const totalBits = (CAPACITY[ecLevel][version - 1] + EC_CODEWORDS[ecLevel][version - 1]) * 8;
-  bits += '0000'.slice(0, Math.min(4, totalBits - bits.length));
-  while (bits.length % 8 !== 0) bits += '0';
-  while (bits.length < totalBits) bits += bits.length % 16 === 0 ? '11101100' : '00010001';
-
-  // Place data modules (simplified)
-  let bitIndex = 0;
-  let upward = true;
-  for (let col = moduleCount - 1; col >= 0; col -= 2) {
-    if (col === 6) col = 5; // Skip timing pattern column
-    const rows = upward ? [...Array(moduleCount).keys()].reverse() : [...Array(moduleCount).keys()];
-    for (const row of rows) {
-      for (let c = 0; c < 2; c++) {
-        const cc = col - c;
-        if (modules[row][cc] === null) {
-          modules[row][cc] = bitIndex < bits.length ? bits[bitIndex++] === '1' : false;
-        }
-      }
-    }
-    upward = !upward;
-  }
-
-  // Apply mask pattern 0 (checkerboard)
-  for (let row = 0; row < moduleCount; row++) {
-    for (let col = 0; col < moduleCount; col++) {
-      if (modules[row][col] !== null && (row + col) % 2 === 0) {
-        // Only flip data modules (skip function patterns)
-        const isFunctionPattern =
-          (row < 9 && col < 9) || // Top-left finder + format
-          (row < 9 && col >= moduleCount - 8) || // Top-right finder
-          (row >= moduleCount - 8 && col < 9) || // Bottom-left finder
-          row === 6 || col === 6; // Timing patterns
-        if (!isFunctionPattern) {
-          modules[row][col] = !modules[row][col];
-        }
-      }
-    }
-  }
-
-  // Create canvas
-  const canvas = document.createElement('canvas');
-  const padding = 4;
-  const cellSize = Math.floor(size / (moduleCount + padding * 2));
-  canvas.width = canvas.height = (moduleCount + padding * 2) * cellSize;
-  const ctx = canvas.getContext('2d');
-
-  ctx.fillStyle = '#FFFFFF';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  ctx.fillStyle = '#000000';
-  for (let row = 0; row < moduleCount; row++) {
-    for (let col = 0; col < moduleCount; col++) {
-      if (modules[row][col]) {
-        ctx.fillRect((col + padding) * cellSize, (row + padding) * cellSize, cellSize, cellSize);
-      }
-    }
-  }
-
-  return canvas.toDataURL();
-};
-
 // Generate a random room ID
 const generateRoomId = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -293,11 +151,40 @@ const parseRoomIdFromUrl = () => {
   return params.get('room');
 };
 
+const normalizeSignalingUrl = (inputUrl) => {
+  if (!inputUrl) return null;
+  try {
+    const url = new URL(inputUrl, window.location.origin);
+    url.search = '';
+    url.hash = '';
+    if (url.protocol === 'http:') {
+      url.protocol = 'ws:';
+    } else if (url.protocol === 'https:') {
+      url.protocol = 'wss:';
+    }
+    return url.toString();
+  } catch (error) {
+    console.warn('[signaling] invalid signaling url', error);
+    return null;
+  }
+};
+
 const getDefaultSignalingUrl = () => {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const hostname = window.location.hostname;
-  const port = process.env.REACT_APP_SIGNALING_PORT ?? '3001';
-  return `${protocol}//${hostname}:${port}`;
+  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+  const envPort = process.env.REACT_APP_SIGNALING_PORT ?? process.env.SIGNALING_PORT ?? '';
+  const port = envPort.trim() || null;
+
+  if (isLocalhost) {
+    return `${protocol}//${hostname}:${port ?? '3001'}`;
+  }
+
+  if (port) {
+    return `${protocol}//${hostname}:${port}`;
+  }
+
+  return `${protocol}//${window.location.host}`;
 };
 
 const clampPercent = (value, min = 10, max = 100) => {
@@ -433,10 +320,9 @@ const SlimeSoccer = () => {
   const signalingQueueRef = useRef([]);
 
   const resourceBaseUrl = `${process.env.PUBLIC_URL}/resources`;
-  const signalingUrl = useMemo(
-    () => process.env.REACT_APP_SIGNALING_URL ?? getDefaultSignalingUrl(),
-    []
-  );
+  const signalingUrl = useMemo(() => {
+    return normalizeSignalingUrl(process.env.REACT_APP_SIGNALING_URL) ?? getDefaultSignalingUrl();
+  }, []);
   const displayHistoryImages =
     (process.env.REACT_APP_DISPLAY_HISTORY_IMAGES ?? process.env.DISPLAY_HISTORY_IMAGES ?? 'TRUE')
       .toUpperCase() !== 'FALSE';
@@ -509,11 +395,38 @@ const SlimeSoccer = () => {
     return baseUrl.toString();
   }, []);
 
-  // QR code data URL
-  const qrCodeDataUrl = useMemo(() => {
-    if (!roomId) return null;
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState(null);
+
+  useEffect(() => {
+    let isActive = true;
+    if (!roomId) {
+      setQrCodeDataUrl(null);
+      return () => {
+        isActive = false;
+      };
+    }
+
     const joinUrl = getJoinUrl(roomId);
-    return generateQRCode(joinUrl, 200);
+    QRCode.toDataURL(joinUrl, {
+      width: 220,
+      margin: 2,
+      errorCorrectionLevel: 'M',
+    })
+      .then((dataUrl) => {
+        if (isActive) {
+          setQrCodeDataUrl(dataUrl);
+        }
+      })
+      .catch((error) => {
+        console.warn('[qr] failed to generate QR code', error);
+        if (isActive) {
+          setQrCodeDataUrl(null);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
   }, [roomId, getJoinUrl]);
 
   // Clean up WebRTC connection
