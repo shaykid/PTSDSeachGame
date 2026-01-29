@@ -1718,7 +1718,7 @@ const SlimeSoccer = () => {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen w-screen bg-green-700 text-gray-900 p-4" dir="rtl">
       {selectionStep === 'mode' && (
-        <div className="text-center relative">
+        <div className="text-center relative w-full">
           {displayHistoryImages && historyOverlay.src && (
             <div className="fixed inset-0 pointer-events-none z-0">
               <img
@@ -1739,7 +1739,14 @@ const SlimeSoccer = () => {
               />
             </div>
           )}
-          <div className="relative z-10">
+          <div className="absolute top-0 left-0 right-0 flex justify-center z-10">
+            <img
+              src={`${resourceBaseUrl}/diamonds.png`}
+              alt="Diamonds"
+              className="h-28 md:h-36 w-auto object-contain"
+            />
+          </div>
+          <div className="relative z-10 pt-32 md:pt-40">
             <h1 className="text-5xl font-bold mb-6 text-green-300" style={{fontFamily: 'Arial, sans-serif'}}>
               {t('mainTitle')}
             </h1>
