@@ -1763,55 +1763,109 @@ const SlimeSoccer = () => {
             <ShapeButton
               shape="helmetCamo"
               label={t('helmetCamo')}
-              onClick={() => setSelectedShapes({
-                ...selectedShapes,
-                [playerMode === 'single' ? 'right' : 'left']: 'helmetCamo',
-              })}
+              onClick={() => {
+                setSelectedShapes((prev) => {
+                  const key = playerMode === 'single' ? 'right' : 'left';
+                  const next = { ...prev, [key]: 'helmetCamo' };
+                  if (playerMode === 'single') {
+                    next.left = pickRandomShape('helmetCamo');
+                  }
+                  return next;
+                });
+                if (playerMode === 'single') {
+                  setSelectionStep('ball');
+                }
+              }}
               selected={(playerMode === 'single' ? selectedShapes.right : selectedShapes.left) === 'helmetCamo'}
             />
             <ShapeButton
               shape="helmetDesert"
               label={t('helmetDesert')}
-              onClick={() => setSelectedShapes({
-                ...selectedShapes,
-                [playerMode === 'single' ? 'right' : 'left']: 'helmetDesert',
-              })}
+              onClick={() => {
+                setSelectedShapes((prev) => {
+                  const key = playerMode === 'single' ? 'right' : 'left';
+                  const next = { ...prev, [key]: 'helmetDesert' };
+                  if (playerMode === 'single') {
+                    next.left = pickRandomShape('helmetDesert');
+                  }
+                  return next;
+                });
+                if (playerMode === 'single') {
+                  setSelectionStep('ball');
+                }
+              }}
               selected={(playerMode === 'single' ? selectedShapes.right : selectedShapes.left) === 'helmetDesert'}
             />
             <ShapeButton
               shape="helmetUrban"
               label={t('helmetUrban')}
-              onClick={() => setSelectedShapes({
-                ...selectedShapes,
-                [playerMode === 'single' ? 'right' : 'left']: 'helmetUrban',
-              })}
+              onClick={() => {
+                setSelectedShapes((prev) => {
+                  const key = playerMode === 'single' ? 'right' : 'left';
+                  const next = { ...prev, [key]: 'helmetUrban' };
+                  if (playerMode === 'single') {
+                    next.left = pickRandomShape('helmetUrban');
+                  }
+                  return next;
+                });
+                if (playerMode === 'single') {
+                  setSelectionStep('ball');
+                }
+              }}
               selected={(playerMode === 'single' ? selectedShapes.right : selectedShapes.left) === 'helmetUrban'}
             />
             <ShapeButton
               shape="labrador"
               label={t('labrador')}
-              onClick={() => setSelectedShapes({
-                ...selectedShapes,
-                [playerMode === 'single' ? 'right' : 'left']: 'labrador',
-              })}
+              onClick={() => {
+                setSelectedShapes((prev) => {
+                  const key = playerMode === 'single' ? 'right' : 'left';
+                  const next = { ...prev, [key]: 'labrador' };
+                  if (playerMode === 'single') {
+                    next.left = pickRandomShape('labrador');
+                  }
+                  return next;
+                });
+                if (playerMode === 'single') {
+                  setSelectionStep('ball');
+                }
+              }}
               selected={(playerMode === 'single' ? selectedShapes.right : selectedShapes.left) === 'labrador'}
             />
             <ShapeButton
               shape="tank"
               label={t('tank')}
-              onClick={() => setSelectedShapes({
-                ...selectedShapes,
-                [playerMode === 'single' ? 'right' : 'left']: 'tank',
-              })}
+              onClick={() => {
+                setSelectedShapes((prev) => {
+                  const key = playerMode === 'single' ? 'right' : 'left';
+                  const next = { ...prev, [key]: 'tank' };
+                  if (playerMode === 'single') {
+                    next.left = pickRandomShape('tank');
+                  }
+                  return next;
+                });
+                if (playerMode === 'single') {
+                  setSelectionStep('ball');
+                }
+              }}
               selected={(playerMode === 'single' ? selectedShapes.right : selectedShapes.left) === 'tank'}
             />
             <ShapeButton
               shape="sunflower"
               label={t('sunflower')}
-              onClick={() => setSelectedShapes({
-                ...selectedShapes,
-                [playerMode === 'single' ? 'right' : 'left']: 'sunflower',
-              })}
+              onClick={() => {
+                setSelectedShapes((prev) => {
+                  const key = playerMode === 'single' ? 'right' : 'left';
+                  const next = { ...prev, [key]: 'sunflower' };
+                  if (playerMode === 'single') {
+                    next.left = pickRandomShape('sunflower');
+                  }
+                  return next;
+                });
+                if (playerMode === 'single') {
+                  setSelectionStep('ball');
+                }
+              }}
               selected={(playerMode === 'single' ? selectedShapes.right : selectedShapes.left) === 'sunflower'}
             />
           </div>
@@ -1820,43 +1874,79 @@ const SlimeSoccer = () => {
             <>
               <p className="mb-4 text-gray-300 mt-6">{t('player2')}</p>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-                <ShapeButton
-                  shape="helmetCamo"
-                  label={t('helmetCamo')}
-                  onClick={() => setSelectedShapes({...selectedShapes, right: 'helmetCamo'})}
-                  selected={selectedShapes.right === 'helmetCamo'}
-                />
-                <ShapeButton
-                  shape="helmetDesert"
-                  label={t('helmetDesert')}
-                  onClick={() => setSelectedShapes({...selectedShapes, right: 'helmetDesert'})}
-                  selected={selectedShapes.right === 'helmetDesert'}
-                />
-                <ShapeButton
-                  shape="helmetUrban"
-                  label={t('helmetUrban')}
-                  onClick={() => setSelectedShapes({...selectedShapes, right: 'helmetUrban'})}
-                  selected={selectedShapes.right === 'helmetUrban'}
-                />
-                <ShapeButton
-                  shape="labrador"
-                  label={t('labrador')}
-                  onClick={() => setSelectedShapes({...selectedShapes, right: 'labrador'})}
-                  selected={selectedShapes.right === 'labrador'}
-                />
-                <ShapeButton
-                  shape="tank"
-                  label={t('tank')}
-                  onClick={() => setSelectedShapes({...selectedShapes, right: 'tank'})}
-                  selected={selectedShapes.right === 'tank'}
-                />
-                <ShapeButton
-                  shape="sunflower"
-                  label={t('sunflower')}
-                  onClick={() => setSelectedShapes({...selectedShapes, right: 'sunflower'})}
-                  selected={selectedShapes.right === 'sunflower'}
-                />
-              </div>
+            <ShapeButton
+              shape="helmetCamo"
+              label={t('helmetCamo')}
+              onClick={() => {
+                setSelectedShapes((prev) => ({
+                  ...prev,
+                  right: 'helmetCamo',
+                }));
+                setSelectionStep('ball');
+              }}
+              selected={selectedShapes.right === 'helmetCamo'}
+            />
+            <ShapeButton
+              shape="helmetDesert"
+              label={t('helmetDesert')}
+              onClick={() => {
+                setSelectedShapes((prev) => ({
+                  ...prev,
+                  right: 'helmetDesert',
+                }));
+                setSelectionStep('ball');
+              }}
+              selected={selectedShapes.right === 'helmetDesert'}
+            />
+            <ShapeButton
+              shape="helmetUrban"
+              label={t('helmetUrban')}
+              onClick={() => {
+                setSelectedShapes((prev) => ({
+                  ...prev,
+                  right: 'helmetUrban',
+                }));
+                setSelectionStep('ball');
+              }}
+              selected={selectedShapes.right === 'helmetUrban'}
+            />
+            <ShapeButton
+              shape="labrador"
+              label={t('labrador')}
+              onClick={() => {
+                setSelectedShapes((prev) => ({
+                  ...prev,
+                  right: 'labrador',
+                }));
+                setSelectionStep('ball');
+              }}
+              selected={selectedShapes.right === 'labrador'}
+            />
+            <ShapeButton
+              shape="tank"
+              label={t('tank')}
+              onClick={() => {
+                setSelectedShapes((prev) => ({
+                  ...prev,
+                  right: 'tank',
+                }));
+                setSelectionStep('ball');
+              }}
+              selected={selectedShapes.right === 'tank'}
+            />
+            <ShapeButton
+              shape="sunflower"
+              label={t('sunflower')}
+              onClick={() => {
+                setSelectedShapes((prev) => ({
+                  ...prev,
+                  right: 'sunflower',
+                }));
+                setSelectionStep('ball');
+              }}
+              selected={selectedShapes.right === 'sunflower'}
+            />
+          </div>
             </>
           )}
           
@@ -1870,23 +1960,6 @@ const SlimeSoccer = () => {
             >
               {t('backButton')}
             </button>
-            {((playerMode === 'single' && selectedShapes.right) || 
-              (playerMode === 'multi' && selectedShapes.left && selectedShapes.right)) && (
-              <button
-                onClick={() => {
-                  if (playerMode === 'single') {
-                    setSelectedShapes((prev) => ({
-                      ...prev,
-                      left: pickRandomShape(prev.right),
-                    }));
-                  }
-                  setSelectionStep('ball');
-                }}
-                className={`px-6 py-3 rounded ${lightButtonClasses}`}
-              >
-                {t('nextButton')}
-              </button>
-            )}
           </div>
         </div>
       )}
@@ -1899,19 +1972,28 @@ const SlimeSoccer = () => {
             <ShapeButton
               shape="grenade"
               label={t('grenade')}
-              onClick={() => setSelectedBall('grenade')}
+              onClick={() => {
+                setSelectedBall('grenade');
+                setSelectionStep('duration');
+              }}
               selected={selectedBall === 'grenade'}
             />
             <ShapeButton
               shape="pill"
               label={t('pill')}
-              onClick={() => setSelectedBall('pill')}
+              onClick={() => {
+                setSelectedBall('pill');
+                setSelectionStep('duration');
+              }}
               selected={selectedBall === 'pill'}
             />
             <ShapeButton
               shape="cannabis"
               label={t('cannabis')}
-              onClick={() => setSelectedBall('cannabis')}
+              onClick={() => {
+                setSelectedBall('cannabis');
+                setSelectionStep('duration');
+              }}
               selected={selectedBall === 'cannabis'}
             />
           </div>
@@ -1926,14 +2008,6 @@ const SlimeSoccer = () => {
             >
               {t('backButton')}
             </button>
-            {selectedBall && (
-              <button
-                onClick={() => setSelectionStep('duration')}
-                className={`px-6 py-3 rounded ${lightButtonClasses}`}
-              >
-                {t('nextButton')}
-              </button>
-            )}
           </div>
         </div>
       )}
