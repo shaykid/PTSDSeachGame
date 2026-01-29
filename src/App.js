@@ -3,8 +3,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 const TRANSLATIONS = {
   "he-IL": {
     "mainTitle": "משחק להרגעה ליהלומי קרב",
-    "gameTitle": "כדורגל טיפולי SeachTen",
-    "originalAuthor": "משחק טיפולי ללוחמי PTSD",
+    "gameTitle": "כדורגל טיפולי",
+    "originalAuthor": "משחק מותאם ללוחמי PTSD",
     "adaptedBy": "פותח באהבה על ידי Seach Medical Group",
     "singlePlayer": "שחקן בודד",
     "multiplayer": "שני שחקנים",
