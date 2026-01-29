@@ -30,17 +30,24 @@ const getRoom = (roomId) => {
   return rooms.get(roomId);
 };
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
+  const remoteAddress = req?.socket?.remoteAddress ?? 'unknown';
+  console.log(`[signaling] connection opened from ${remoteAddress}`);
+
   ws.on('message', (raw) => {
     let message;
     try {
       message = JSON.parse(raw.toString());
     } catch (error) {
+      console.error('[signaling] invalid JSON message', error);
       return;
     }
 
     const { type, roomId } = message;
-    if (!roomId) return;
+    if (!roomId) {
+      console.warn('[signaling] message missing roomId', { type });
+      return;
+    }
 
     const room = getRoom(roomId);
 
@@ -48,6 +55,7 @@ wss.on('connection', (ws) => {
       room.host = ws;
       ws.roomId = roomId;
       ws.role = 'host';
+      console.log(`[signaling] host registered for room ${roomId}`);
       if (room.guest) {
         send(room.host, { type: 'peerJoined' });
         if (room.offer) {
@@ -59,6 +67,7 @@ wss.on('connection', (ws) => {
 
     if (type === 'join') {
       if (room.guest && room.guest.readyState === WebSocket.OPEN) {
+        console.warn(`[signaling] room ${roomId} is full`);
         send(ws, { type: 'roomFull' });
         return;
       }
@@ -66,6 +75,7 @@ wss.on('connection', (ws) => {
       room.guest = ws;
       ws.roomId = roomId;
       ws.role = 'guest';
+      console.log(`[signaling] guest joined room ${roomId}`);
       if (room.host) {
         send(room.host, { type: 'peerJoined' });
       }
@@ -77,6 +87,7 @@ wss.on('connection', (ws) => {
 
     if (type === 'offer') {
       room.offer = message.offer;
+      console.log(`[signaling] offer stored for room ${roomId}`);
       if (room.guest) {
         send(room.guest, { type: 'offer', offer: message.offer });
       }
@@ -84,6 +95,7 @@ wss.on('connection', (ws) => {
     }
 
     if (type === 'answer') {
+      console.log(`[signaling] answer forwarded for room ${roomId}`);
       if (room.host) {
         send(room.host, { type: 'answer', answer: message.answer });
       }
@@ -92,8 +104,15 @@ wss.on('connection', (ws) => {
 
     if (type === 'iceCandidate') {
       const target = ws.role === 'host' ? room.guest : room.host;
+      if (!target) {
+        console.warn(`[signaling] no peer for iceCandidate in room ${roomId}`);
+      }
       send(target, { type: 'iceCandidate', candidate: message.candidate });
     }
+  });
+
+  ws.on('error', (error) => {
+    console.error('[signaling] socket error', error);
   });
 
   ws.on('close', () => {
@@ -105,13 +124,16 @@ wss.on('connection', (ws) => {
     if (role === 'host') {
       room.host = null;
       room.offer = null;
+      console.log(`[signaling] host left room ${roomId}`);
       send(room.guest, { type: 'peerLeft' });
     } else if (role === 'guest') {
       room.guest = null;
+      console.log(`[signaling] guest left room ${roomId}`);
       send(room.host, { type: 'peerLeft' });
     }
 
     if (!room.host && !room.guest) {
+      console.log(`[signaling] deleting empty room ${roomId}`);
       rooms.delete(roomId);
     }
   });
