@@ -257,7 +257,7 @@ const SlimeSoccer = () => {
   const goalHeight = setSizeConfig?.goalpostPercent
     ? (setSizeConfig.goalpostPercent / 100) * GAME_HEIGHT
     : defaultGoalSize;
-  const SLIME_RADIUS = playerSize / 2;
+  const SLIME_RADIUS = playerSize; // 2;
   const BALL_RADIUS = ballSize / 2;
   const GOAL_WIDTH = goalWidth;
   const GOAL_HEIGHT = goalHeight;
