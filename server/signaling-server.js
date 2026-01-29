@@ -1,7 +1,9 @@
 const http = require('http');
 const WebSocket = require('ws');
 
-const PORT = Number(process.env.SIGNALING_PORT ?? 3001);
+const PORT = Number(
+  process.env.REACT_APP_SIGNALING_PORT ?? process.env.SIGNALING_PORT ?? 3001,
+);
 
 const server = http.createServer((_, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
