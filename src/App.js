@@ -611,16 +611,19 @@ const SlimeSoccer = () => {
 
   // Setup data channel event handlers
   const setupDataChannel = useCallback((channel) => {
+    console.log('[webrtc] setting up data channel:', channel.label);
     channel.onopen = () => {
+      console.log('[webrtc] data channel opened');
       setConnectionStatus('connected');
       setRemoteConnected(true);
     };
     channel.onclose = () => {
+      console.log('[webrtc] data channel closed');
       setRemoteConnected(false);
       setConnectionStatus('idle');
     };
     channel.onerror = (error) => {
-      console.error('Data channel error:', error);
+      console.error('[webrtc] data channel error:', error);
       setConnectionStatus('failed');
     };
     channel.onmessage = handlePeerData;
@@ -648,9 +651,16 @@ const SlimeSoccer = () => {
       };
 
       pc.onconnectionstatechange = () => {
+        console.log('[webrtc] connection state changed:', pc.connectionState);
         if (pc.connectionState === 'failed') {
           setConnectionStatus('failed');
+        } else if (pc.connectionState === 'connected') {
+          console.log('[webrtc] peer connection established');
         }
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        console.log('[webrtc] ICE connection state:', pc.iceConnectionState);
       };
 
       const offer = await pc.createOffer();
@@ -684,15 +694,17 @@ const SlimeSoccer = () => {
       if (!pc) return;
 
       await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      console.log('[signaling] host set remote description (answer)');
 
       // Flush any pending ICE candidates that arrived before the answer
       const pendingCandidates = pendingIceCandidatesRef.current;
       pendingIceCandidatesRef.current = [];
+      console.log('[signaling] flushing', pendingCandidates.length, 'queued ICE candidates (host)');
       for (const candidate of pendingCandidates) {
         try {
           await pc.addIceCandidate(new RTCIceCandidate(candidate));
         } catch (err) {
-          console.warn('[signaling] failed to add queued ICE candidate', err);
+          console.warn('[signaling] failed to add queued ICE candidate (host)', err);
         }
       }
     } catch (error) {
@@ -723,9 +735,16 @@ const SlimeSoccer = () => {
       };
 
       pc.onconnectionstatechange = () => {
+        console.log('[webrtc] connection state changed:', pc.connectionState);
         if (pc.connectionState === 'failed') {
           setConnectionStatus('failed');
+        } else if (pc.connectionState === 'connected') {
+          console.log('[webrtc] peer connection established');
         }
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        console.log('[webrtc] ICE connection state:', pc.iceConnectionState);
       };
 
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
@@ -733,6 +752,7 @@ const SlimeSoccer = () => {
       // Flush any pending ICE candidates that arrived before remote description was set
       const pendingCandidates = pendingIceCandidatesRef.current;
       pendingIceCandidatesRef.current = [];
+      console.log('[signaling] flushing', pendingCandidates.length, 'queued ICE candidates (guest)');
       for (const candidate of pendingCandidates) {
         try {
           await pc.addIceCandidate(new RTCIceCandidate(candidate));
@@ -783,6 +803,7 @@ const SlimeSoccer = () => {
             console.log('[signaling] queueing ICE candidate (no remote description yet)');
             pendingIceCandidatesRef.current.push(message.candidate);
           } else {
+            console.log('[signaling] adding ICE candidate directly');
             await pc.addIceCandidate(new RTCIceCandidate(message.candidate));
           }
         }
