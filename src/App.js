@@ -319,6 +319,7 @@ const SlimeSoccer = () => {
   const signalingSocketRef = useRef(null);
   const signalingQueueRef = useRef([]);
   const roomIdRef = useRef(null);
+  const pendingIceCandidatesRef = useRef([]);
 
   const logDocumentAction = useCallback((action, details = {}) => {
     console.log('[document-action]', action, {
@@ -464,6 +465,7 @@ const SlimeSoccer = () => {
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
     }
+    pendingIceCandidatesRef.current = [];
   }, []);
 
   const cleanupSignaling = useCallback(() => {
@@ -682,6 +684,17 @@ const SlimeSoccer = () => {
       if (!pc) return;
 
       await pc.setRemoteDescription(new RTCSessionDescription(answer));
+
+      // Flush any pending ICE candidates that arrived before the answer
+      const pendingCandidates = pendingIceCandidatesRef.current;
+      pendingIceCandidatesRef.current = [];
+      for (const candidate of pendingCandidates) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (err) {
+          console.warn('[signaling] failed to add queued ICE candidate', err);
+        }
+      }
     } catch (error) {
       console.error('Error handling answer:', error);
       setConnectionStatus('failed');
@@ -753,7 +766,13 @@ const SlimeSoccer = () => {
       } else if (message.type === 'iceCandidate') {
         const pc = peerConnectionRef.current;
         if (pc && message.candidate) {
-          await pc.addIceCandidate(new RTCIceCandidate(message.candidate));
+          // Queue ICE candidates if remote description is not set yet (host waiting for answer)
+          if (!pc.remoteDescription) {
+            console.log('[signaling] queueing ICE candidate (no remote description yet)');
+            pendingIceCandidatesRef.current.push(message.candidate);
+          } else {
+            await pc.addIceCandidate(new RTCIceCandidate(message.candidate));
+          }
         }
       } else if (message.type === 'roomFull') {
         console.warn('[signaling] room full');
