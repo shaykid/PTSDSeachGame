@@ -729,6 +729,18 @@ const SlimeSoccer = () => {
       };
 
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
+
+      // Flush any pending ICE candidates that arrived before remote description was set
+      const pendingCandidates = pendingIceCandidatesRef.current;
+      pendingIceCandidatesRef.current = [];
+      for (const candidate of pendingCandidates) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (err) {
+          console.warn('[signaling] failed to add queued ICE candidate (guest)', err);
+        }
+      }
+
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
