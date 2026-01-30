@@ -3,7 +3,7 @@ import QRCode from 'qrcode';
 
 const TRANSLATIONS = {
   "he-IL": {
-    "mainTitle": "רק 💎יהלומים 💎 משחקים",
+    "mainTitle": "יהלומים 💎 משחקים",
     "gameTitle": "כדורגל טיפולי",
     "originalAuthor": "משחק מותאם ללוחמי PTSD",
     "adaptedBy": "פותח באהבה על ידי Seach Medical Group",
