@@ -318,6 +318,7 @@ const SlimeSoccer = () => {
   const dataChannelRef = useRef(null);
   const signalingSocketRef = useRef(null);
   const signalingQueueRef = useRef([]);
+  const roomIdRef = useRef(null);
 
   const logDocumentAction = useCallback((action, details = {}) => {
     console.log('[document-action]', action, {
@@ -400,6 +401,11 @@ const SlimeSoccer = () => {
   useEffect(() => {
     console.log('[signaling] using url', signalingUrl);
   }, [signalingUrl]);
+
+  // Keep roomIdRef in sync with roomId state for use in callbacks
+  useEffect(() => {
+    roomIdRef.current = roomId;
+  }, [roomId]);
 
   const pickRandomShape = useCallback((excludeShape) => {
     const available = AVAILABLE_SHAPES.filter((shape) => shape !== excludeShape);
@@ -697,7 +703,7 @@ const SlimeSoccer = () => {
         if (event.candidate) {
           sendSignalingMessage({
             type: 'iceCandidate',
-            roomId,
+            roomId: roomIdRef.current,
             candidate: event.candidate,
           });
         }
@@ -731,7 +737,7 @@ const SlimeSoccer = () => {
       setConnectionStatus('failed');
       return null;
     }
-  }, [cleanupConnection, roomId, sendSignalingMessage, setupDataChannel]);
+  }, [cleanupConnection, sendSignalingMessage, setupDataChannel]);
 
   const handleSignalingMessage = useCallback(async (event) => {
     try {
@@ -740,7 +746,7 @@ const SlimeSoccer = () => {
       if (message.type === 'offer' && !isHost) {
         const answer = await createAnswer(message.offer);
         if (answer) {
-          sendSignalingMessage({ type: 'answer', roomId, answer });
+          sendSignalingMessage({ type: 'answer', roomId: roomIdRef.current, answer });
         }
       } else if (message.type === 'answer' && isHost) {
         await handleAnswer(message.answer);
@@ -760,7 +766,7 @@ const SlimeSoccer = () => {
     } catch (error) {
       console.error('Error handling signaling message:', error);
     }
-  }, [createAnswer, handleAnswer, isHost, roomId, sendSignalingMessage]);
+  }, [createAnswer, handleAnswer, isHost, sendSignalingMessage]);
 
   const connectSignaling = useCallback(() => {
     const existingSocket = signalingSocketRef.current;
@@ -840,6 +846,7 @@ const SlimeSoccer = () => {
   // Join a remote game
   const joinGame = useCallback(async (roomIdToJoin) => {
     console.log('[remote] join game', roomIdToJoin);
+    roomIdRef.current = roomIdToJoin; // Set ref immediately for use in callbacks
     setRoomId(roomIdToJoin);
     setIsHost(false);
     setConnectionStatus('connecting');
