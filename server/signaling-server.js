@@ -32,7 +32,7 @@ const send = (socket, payload) => {
 
 const getRoom = (roomId) => {
   if (!rooms.has(roomId)) {
-    rooms.set(roomId, { host: null, guest: null, offer: null });
+    rooms.set(roomId, { host: null, guest: null, offer: null, hostIceCandidates: [], guestIceCandidates: [] });
   }
   return rooms.get(roomId);
 };
@@ -75,6 +75,14 @@ wss.on('connection', (ws, req) => {
         if (room.offer) {
           send(room.guest, { type: 'offer', offer: room.offer });
         }
+        // Flush queued guest ICE candidates to the host
+        if (room.guestIceCandidates.length > 0) {
+          console.log(`[signaling] flushing ${room.guestIceCandidates.length} queued guest ICE candidates to host`);
+          for (const candidate of room.guestIceCandidates) {
+            send(room.host, { type: 'iceCandidate', candidate });
+          }
+          room.guestIceCandidates = [];
+        }
       }
       return;
     }
@@ -95,6 +103,14 @@ wss.on('connection', (ws, req) => {
       }
       if (room.offer) {
         send(room.guest, { type: 'offer', offer: room.offer });
+      }
+      // Flush queued host ICE candidates to the guest
+      if (room.hostIceCandidates.length > 0) {
+        console.log(`[signaling] flushing ${room.hostIceCandidates.length} queued host ICE candidates to guest`);
+        for (const candidate of room.hostIceCandidates) {
+          send(room.guest, { type: 'iceCandidate', candidate });
+        }
+        room.hostIceCandidates = [];
       }
       return;
     }
@@ -118,10 +134,18 @@ wss.on('connection', (ws, req) => {
 
     if (type === 'iceCandidate') {
       const target = ws.role === 'host' ? room.guest : room.host;
-      if (!target) {
-        console.warn(`[signaling] no peer for iceCandidate in room ${roomId}`);
+      if (!target || target.readyState !== WebSocket.OPEN) {
+        // Queue ICE candidates when peer isn't available yet
+        if (ws.role === 'host') {
+          room.hostIceCandidates.push(message.candidate);
+          console.log(`[signaling] queued host ICE candidate for room ${roomId} (${room.hostIceCandidates.length} queued)`);
+        } else {
+          room.guestIceCandidates.push(message.candidate);
+          console.log(`[signaling] queued guest ICE candidate for room ${roomId} (${room.guestIceCandidates.length} queued)`);
+        }
+      } else {
+        send(target, { type: 'iceCandidate', candidate: message.candidate });
       }
-      send(target, { type: 'iceCandidate', candidate: message.candidate });
     }
   });
 
@@ -138,10 +162,12 @@ wss.on('connection', (ws, req) => {
     if (role === 'host') {
       room.host = null;
       room.offer = null;
+      room.hostIceCandidates = [];
       console.log(`[signaling] host left room ${roomId}`);
       send(room.guest, { type: 'peerLeft' });
     } else if (role === 'guest') {
       room.guest = null;
+      room.guestIceCandidates = [];
       console.log(`[signaling] guest left room ${roomId}`);
       send(room.host, { type: 'peerLeft' });
     }
