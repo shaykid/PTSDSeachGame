@@ -2530,8 +2530,11 @@ const SlimeSoccer = () => {
     }
     
     // Draw players
-    const leftShape = selectedShapes.left || 'helmetCamo';
-    const rightShape = selectedShapes.right || 'helmetDesert';
+    const swapLocalMultiplayer = playerMode === 'multi';
+    const leftShape =
+      (swapLocalMultiplayer ? selectedShapes.right : selectedShapes.left) || 'helmetCamo';
+    const rightShape =
+      (swapLocalMultiplayer ? selectedShapes.left : selectedShapes.right) || 'helmetDesert';
     
     if (leftShape.startsWith('helmet')) {
       const type = leftShape.replace('helmet', '').toLowerCase();
@@ -2568,6 +2571,7 @@ const SlimeSoccer = () => {
     score,
     selectedShapes,
     selectedBall
+    playerMode   
   ]);
 
   const gameLoop = useCallback((currentTime) => {
