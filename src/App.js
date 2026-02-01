@@ -3186,7 +3186,7 @@ const SlimeSoccer = () => {
                 className="mt-4 text-green-700 font-bold goal-celebration-text"
                 style={{ fontSize: '20vw' }}
               >
-                גול
+                גווווול
               </div>
             </div>
           )}
