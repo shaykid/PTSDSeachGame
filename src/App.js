@@ -2649,7 +2649,7 @@ const SlimeSoccer = () => {
             <p className="mb-2 text-gray-300 text-lg">{t('originalAuthor')}</p>
             <p className="mb-8 text-gray-400 italic">{t('adaptedBy')}</p>
             
-            <div className="flex gap-4 mb-8 items-center justify-center">
+            <div className="flex flex-col gap-4 mb-8 items-center justify-center">
               <button
                 onClick={() => {
                   setPlayerMode('single');
