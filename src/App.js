@@ -988,7 +988,7 @@ const SlimeSoccer = () => {
     if (navigator.share) {
       navigator.share({
         title: '💎אליפות יהלומים💎',
-        text: 'הוזמנת למשחק 💎אליפות יהלומים💎 בכדורגל',
+        text: '\nהוזמנת למשחק 💎אליפות יהלומים💎 בכדורגל\n',
         url: joinUrl
       }).catch(console.error);
     } else {
