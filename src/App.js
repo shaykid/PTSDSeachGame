@@ -53,7 +53,11 @@ const TRANSLATIONS = {
     "youAreHost": "אתה המארח (שחקן שמאל)",
     "youAreGuest": "אתה האורח (שחקן ימין)",
     "startRemoteGame": "התחל משחק",
-    "orShareLink": "או שתפו את הקישור:"
+    "orShareLink": "או שתפו את הקישור:",
+    "guestWaitingMessage": "סבלנות\nמחכה לתגובת החבר",
+    "gameInstruction1": "מטרת המשחק - להכניס כמה שיותר גולים לשער",
+    "gameInstruction2": "יש להשתמש במקשי החיצים שעל המסך להזיז את השחקן",
+    "shareInviteIntro": "הוזמנת למשחק 💎אליפות יהלומים💎 בכדורגל"
   }
 };
 
@@ -81,6 +85,8 @@ const AI_REACTION_DISTANCE = 300;
 const AI_PREDICTION_TIME = 30;
 const MULTI_IDLE_APPROACH_DELAY_MS = 1400;
 const MULTI_IDLE_APPROACH_SPEED = 0.6;
+const GAME_INSTRUCTION_HIDE_DELAY_MS = 20000;
+const GAME_INSTRUCTION_HIDE_STEP_MS = 2000;
 const WAIT_START = Number(
   process.env.REACT_APP_WAIT_START ?? process.env.WAIT_START ?? 18
 ) || 18;
@@ -320,6 +326,10 @@ const SlimeSoccer = () => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [score, setScore] = useState({ left: 0, right: 0 });
   const [gameStarted, setGameStarted] = useState(false);
+  const [instructionVisibility, setInstructionVisibility] = useState({
+    line1: true,
+    line2: true,
+  });
   const [winner, setWinner] = useState(null);
   const [selectionStep, setSelectionStep] = useState('mode'); // 'mode', 'remoteSetup', 'shape', 'ball', 'duration'
   const [selectedShapes, setSelectedShapes] = useState({ left: null, right: null });
@@ -988,7 +998,7 @@ const SlimeSoccer = () => {
     if (navigator.share) {
       navigator.share({
         title: '💎אליפות יהלומים💎',
-        text: '\nהוזמנת למשחק 💎אליפות יהלומים💎 בכדורגל\n',
+        text: `\n${t('shareInviteIntro')}\n${t('gameInstruction1')}\n${t('gameInstruction2')}\n`,
         url: joinUrl
       }).catch(console.error);
     } else {
@@ -2356,6 +2366,7 @@ const SlimeSoccer = () => {
     }
     
     // Draw Seach logo in background (positioned below header)
+    let logoMetrics = null;
     if (logoImageRef.current) {
       ctx.globalAlpha = 0.7;
       const originalWidth = logoImageRef.current.width;
@@ -2378,6 +2389,31 @@ const SlimeSoccer = () => {
         logoHeight
       );
       ctx.globalAlpha = 1.0;
+      logoMetrics = { headerOffset, logoHeight };
+    }
+
+    const instructionLines = [];
+    if (instructionVisibility.line1) {
+      instructionLines.push(t('gameInstruction1'));
+    }
+    if (instructionVisibility.line2) {
+      instructionLines.push(t('gameInstruction2'));
+    }
+
+    if (instructionLines.length > 0) {
+      const fontSize = Math.round(GAME_HEIGHT * 0.03);
+      const lineSpacing = fontSize * 1.4;
+      const baseOffset = logoMetrics
+        ? logoMetrics.headerOffset + logoMetrics.logoHeight
+        : GAME_HEIGHT * 0.15;
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.font = `bold ${fontSize}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      instructionLines.forEach((line, index) => {
+        ctx.fillText(line, GAME_WIDTH / 2, baseOffset + fontSize * 0.5 + index * lineSpacing);
+      });
     }
     
     // Draw ground
@@ -2522,7 +2558,17 @@ const SlimeSoccer = () => {
     // Draw ball
     const ballType = selectedBall || 'cannabis';
     drawBall(ctx, state.ball.x, state.ball.y, BALL_RADIUS, ballType);
-  }, [GAME_HEIGHT, GAME_WIDTH, GOAL_HEIGHT, GOAL_WIDTH, GROUND_HEIGHT, score, selectedShapes, selectedBall]);
+  }, [
+    GAME_HEIGHT,
+    GAME_WIDTH,
+    GOAL_HEIGHT,
+    GOAL_WIDTH,
+    GROUND_HEIGHT,
+    instructionVisibility,
+    score,
+    selectedShapes,
+    selectedBall
+  ]);
 
   const gameLoop = useCallback((currentTime) => {
     if (gameStarted) {
@@ -2549,6 +2595,26 @@ const SlimeSoccer = () => {
       }
     };
   }, [gameStarted, gameLoop]);
+
+  useEffect(() => {
+    if (!gameStarted) {
+      setInstructionVisibility({ line1: true, line2: true });
+      return;
+    }
+
+    const hideFirst = setTimeout(() => {
+      setInstructionVisibility((prev) => ({ ...prev, line1: false }));
+    }, GAME_INSTRUCTION_HIDE_DELAY_MS);
+
+    const hideSecond = setTimeout(() => {
+      setInstructionVisibility((prev) => ({ ...prev, line2: false }));
+    }, GAME_INSTRUCTION_HIDE_DELAY_MS + GAME_INSTRUCTION_HIDE_STEP_MS);
+
+    return () => {
+      clearTimeout(hideFirst);
+      clearTimeout(hideSecond);
+    };
+  }, [gameStarted]);
 
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -2772,7 +2838,7 @@ const SlimeSoccer = () => {
                 <div className="flex flex-col items-center gap-4">
                   <p className="text-green-400 text-xl">{t('connected')}</p>
                   <p className="text-gray-300">{t('youAreGuest')}</p>
-                  <p className="text-gray-400 text-sm">{t('waitingForPlayer')}</p>
+                  <p className="text-gray-400 text-sm whitespace-pre-line">{t('guestWaitingMessage')}</p>
                 </div>
               )}
 
@@ -2832,7 +2898,7 @@ const SlimeSoccer = () => {
                 ))}
               </div>
               {selectedShapes.right && (
-                <p className="text-gray-400 text-sm mt-4">{t('waitingForPlayer')}</p>
+                <p className="text-gray-400 text-sm mt-4 whitespace-pre-line">{t('guestWaitingMessage')}</p>
               )}
             </>
           )}
