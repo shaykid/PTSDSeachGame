@@ -1244,7 +1244,7 @@ const SlimeSoccer = () => {
     const visibleDuration = 1000;
     const pauseDuration = 0;
     // Keep round history images below the button area (lower 30% of the screen).
-    const minCenterOffset = 05;
+    const minCenterOffset = 5;
     const maxCenterOffset = 95;
 
     const scheduleCycle = () => {
