@@ -1244,7 +1244,7 @@ const SlimeSoccer = () => {
     const visibleDuration = 1000;
     const pauseDuration = 0;
     // Keep round history images below the button area (lower 30% of the screen).
-    const minCenterOffset = 70;
+    const minCenterOffset = 05;
     const maxCenterOffset = 95;
 
     const scheduleCycle = () => {
@@ -2725,7 +2725,7 @@ const SlimeSoccer = () => {
       )}
 
       {selectionStep === 'mode' && (
-        <div className="text-center relative w-full">
+        <div className="text-center relative w-full z-10">
           <div className="fixed top-0 left-0 right-0 flex justify-center z-10">
             <img
               src={`${resourceBaseUrl}/diamonds.png`}
@@ -2763,7 +2763,7 @@ const SlimeSoccer = () => {
       )}
 
       {selectionStep === 'remoteSetup' && (
-        <div className="text-center">
+       <div className="text-center relative z-10">
           <h2 className="text-3xl font-bold mb-6 text-green-400">
             {t('remoteMultiplayer')}
           </h2>
@@ -2887,7 +2887,7 @@ const SlimeSoccer = () => {
       )}
 
       {selectionStep === 'shape' && (
-        <div className="text-center">
+        <div className="text-center relative z-10">
           <h2 className="text-3xl font-bold mb-6 text-green-400">{t('selectShape')}</h2>
 
           {/* Remote mode - Guest selects their own character */}
@@ -3017,7 +3017,7 @@ const SlimeSoccer = () => {
       )}
       
       {selectionStep === 'ball' && (
-        <div className="text-center">
+        <div className="text-center relative z-10">
           <h2 className="text-3xl font-bold mb-6 text-green-400">{t('selectBall')}</h2>
           
           <div className="grid grid-cols-3 gap-6 mb-6 max-w-md mx-auto">
@@ -3065,7 +3065,7 @@ const SlimeSoccer = () => {
       )}
       
       {selectionStep === 'duration' && !gameStarted && !winner && (
-        <div className="text-center">
+         <div className="text-center relative z-10">
           <h2 className="text-2xl font-bold mb-4">{t('selectDuration')}</h2>
           
           <div className="mb-4 text-lg">
