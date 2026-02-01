@@ -41,7 +41,7 @@ const TRANSLATIONS = {
     "player1": "שחקן 1 (שמאל)",
     "player2": "שחקן 2 (ימין)",
     "chooseCharacter": "בחר את הדמות שלך",
-    "remoteMultiplayer": "2 שחקנים במכשירים שונים",
+    "remoteMultiplayer": "לשחק עם חבר",
     "waitingForPlayer": "ממתין לשחקן שני...",
     "scanQRCode": "סרקו את הקוד או שתפו את הקישור",
     "shareLink": "שתף קישור",
@@ -1197,7 +1197,9 @@ const SlimeSoccer = () => {
   }, [WAIT_START]);
 
   useEffect(() => {
-    if (selectionStep !== 'mode' || !displayHistoryImages) {
+    // Show history images on all selection screens (not during actual game or winner display)
+    const showImages = !gameStarted && !winner && displayHistoryImages;
+    if (!showImages) {
       historyImageCountRef.current = 0;
       waitSoundPlayedRef.current = false;
       setHistoryOverlay((prev) => ({ ...prev, visible: false }));
@@ -1209,8 +1211,9 @@ const SlimeSoccer = () => {
     const fadeDuration = 0;
     const visibleDuration = 1000;
     const pauseDuration = 0;
-    const minCenterOffset = 25;
-    const maxCenterOffset = 75;
+    // Allow images to appear from header to footer (5% to 95% of screen)
+    const minCenterOffset = 5;
+    const maxCenterOffset = 95;
 
     const scheduleCycle = () => {
       if (cancelled) return;
@@ -1257,7 +1260,7 @@ const SlimeSoccer = () => {
       cancelled = true;
       timeouts.forEach((timeoutId) => clearTimeout(timeoutId));
     };
-  }, [displayHistoryImages, handleHistoryImageShown, resourceBaseUrl, selectionStep]);
+  }, [displayHistoryImages, handleHistoryImageShown, resourceBaseUrl, gameStarted, winner]);
 
   const playGoalSound = useCallback(() => {
     if (goalAudioRef.current) {
@@ -2341,8 +2344,8 @@ const SlimeSoccer = () => {
       ctx.globalAlpha = 0.7;
       const originalWidth = logoImageRef.current.width;
       const originalHeight = logoImageRef.current.height;
-      const targetWidth = GAME_WIDTH * 0.5;
-      const targetHeight = GAME_HEIGHT * 0.5;
+      const targetWidth = GAME_WIDTH * 1.0;
+      const targetHeight = GAME_HEIGHT * 1.0;
       const scale = Math.min(
         targetWidth / originalWidth,
         targetHeight / originalHeight
@@ -2536,7 +2539,7 @@ const SlimeSoccer = () => {
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
-  const lightButtonClasses = 'bg-green-200 hover:bg-green-300 text-green-900 border-2 border-green-300';
+  const lightButtonClasses = 'bg-green-200 hover:bg-green-300 text-green-900 border-2 border-green-300 ellipse-button';
 
   const setKeyState = useCallback((key, pressed) => {
     keysRef.current[key] = pressed;
@@ -2595,9 +2598,9 @@ const SlimeSoccer = () => {
   const ShapeButton = ({ shape, label, onClick, selected }) => (
     <button
       onClick={onClick}
-      className={`px-6 py-4 rounded border-2 transition-all ${
-        selected 
-          ? 'bg-green-300 border-green-400 scale-105' 
+      className={`px-6 py-4 border-2 transition-all ellipse-button ${
+        selected
+          ? 'bg-green-300 border-green-400 scale-105'
           : 'bg-green-200 border-green-300 hover:bg-green-300'
       }`}
     >
@@ -2607,28 +2610,30 @@ const SlimeSoccer = () => {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen w-screen bg-green-700 text-gray-900 p-4" dir="rtl">
+      {/* History images overlay - shown on all selection screens */}
+      {!gameStarted && !winner && displayHistoryImages && historyOverlay.src && (
+        <div className="fixed inset-0 pointer-events-none z-0">
+          <img
+            src={historyOverlay.src}
+            alt=""
+            className="absolute"
+            style={{
+              width: '39vmin',
+              height: '39vmin',
+              left: `${historyOverlay.position.x}%`,
+              top: `${historyOverlay.position.y}%`,
+              transform: 'translate(-50%, -50%)',
+              objectFit: 'cover',
+              borderRadius: '9999px',
+              opacity: historyOverlay.visible ? 0.6 : 0,
+              transition: 'opacity 0.2s ease-in-out'
+            }}
+          />
+        </div>
+      )}
+
       {selectionStep === 'mode' && (
         <div className="text-center relative w-full">
-          {displayHistoryImages && historyOverlay.src && (
-            <div className="fixed inset-0 pointer-events-none z-0">
-              <img
-                src={historyOverlay.src}
-                alt=""
-                className="absolute"
-                style={{
-                  width: '30vmin',
-                  height: '30vmin',
-                  left: `${historyOverlay.position.x}%`,
-                  top: `${historyOverlay.position.y}%`,
-                  transform: 'translate(-50%, -50%)',
-                  objectFit: 'cover',
-                  borderRadius: '9999px',
-                  opacity: historyOverlay.visible ? 0.6 : 0,
-                  transition: 'opacity 0.2s ease-in-out'
-                }}
-              />
-            </div>
-          )}
           <div className="fixed top-0 left-0 right-0 flex justify-center z-10">
             <img
               src={`${resourceBaseUrl}/diamonds.png`}
@@ -2644,30 +2649,19 @@ const SlimeSoccer = () => {
             <p className="mb-2 text-gray-300 text-lg">{t('originalAuthor')}</p>
             <p className="mb-8 text-gray-400 italic">{t('adaptedBy')}</p>
             
-            <div className="flex flex-col gap-4 mb-8 items-center">
-              <div className="flex gap-4 justify-center">
-                <button
-                  onClick={() => {
-                    setPlayerMode('single');
-                    setSelectionStep('shape');
-                  }}
-                  className={`px-8 py-4 rounded text-lg transition-all ${lightButtonClasses}`}
-                >
-                  {t('singlePlayer')}
-                </button>
-                <button
-                  onClick={() => {
-                    setPlayerMode('multi');
-                    setSelectionStep('shape');
-                  }}
-                  className={`px-8 py-4 rounded text-lg transition-all ${lightButtonClasses}`}
-                >
-                  {t('multiplayer')}
-                </button>
-              </div>
+            <div className="flex gap-4 mb-8 items-center justify-center">
+              <button
+                onClick={() => {
+                  setPlayerMode('single');
+                  setSelectionStep('shape');
+                }}
+                className={`px-8 py-4 text-lg transition-all min-w-48 ${lightButtonClasses}`}
+              >
+                {t('singlePlayer')}
+              </button>
               <button
                 onClick={startHosting}
-                className={`px-8 py-4 rounded text-lg transition-all ${lightButtonClasses}`}
+                className={`px-8 py-4 text-lg transition-all min-w-48 ${lightButtonClasses}`}
               >
                 {t('remoteMultiplayer')}
               </button>
