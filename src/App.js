@@ -1121,7 +1121,7 @@ const SlimeSoccer = () => {
     
     // Load Seach logo
     const logoImg = new Image();
-    logoImg.src = `${resourceBaseUrl}/logo2.png`;
+    logoImg.src = `${resourceBaseUrl}/seach-logo.png`;
     logoImg.onload = () => {
       logoImageRef.current = logoImg;
     };
@@ -2336,7 +2336,7 @@ const SlimeSoccer = () => {
       ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
     }
     
-    // Draw Seach logo in background
+    // Draw Seach logo in background (positioned below header)
     if (logoImageRef.current) {
       ctx.globalAlpha = 0.7;
       const originalWidth = logoImageRef.current.width;
@@ -2349,10 +2349,12 @@ const SlimeSoccer = () => {
       );
       const logoWidth = originalWidth * scale;
       const logoHeight = originalHeight * scale;
+      // Offset to position below header (header is approx 60px in screen space)
+      const headerOffset = GAME_HEIGHT * 0.08;
       ctx.drawImage(
         logoImageRef.current,
         GAME_WIDTH / 2 - logoWidth / 2,
-        0,
+        headerOffset,
         logoWidth,
         logoHeight
       );
@@ -3041,8 +3043,8 @@ const SlimeSoccer = () => {
         <div className="fixed inset-0 flex flex-col items-center justify-start bg-green-700">
           {!isLandscape && (
             <div className="absolute top-0 left-0 right-0 bg-green-800 px-8 py-4 w-full flex justify-between items-center z-10">
-              <span className="text-xl font-bold">{t('cyanTeam')}: {score.left}</span>
-              <span className="text-xl font-bold">{score.right} : {t('redTeam')}</span>
+              <span className="text-xl font-bold">{score.left}</span>
+              <span className="text-xl font-bold">{score.right}</span>
             </div>
           )}
           
