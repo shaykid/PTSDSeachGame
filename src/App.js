@@ -2821,7 +2821,7 @@ const SlimeSoccer = () => {
             />
           </div>
           
-          {playerMode === 'multi' && selectedShapes.left && !selectedShapes.right && (
+          {(playerMode === 'multi' || playerMode === 'remote') && selectedShapes.left && !selectedShapes.right && (
             <>
               <p className="mb-4 text-gray-300 mt-6">{t('player2')}</p>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
