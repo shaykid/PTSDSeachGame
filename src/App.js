@@ -578,6 +578,15 @@ const SlimeSoccer = () => {
       } else if (data.type === 'gameEnd') {
         setWinner(data.winner);
         setGameStarted(false);
+      } else if (data.type === 'selectionStep') {
+        // Guest receives selection step from host
+        setSelectionStep(data.step);
+        if (data.hostShape) {
+          setSelectedShapes((prev) => ({ ...prev, left: data.hostShape }));
+        }
+      } else if (data.type === 'guestCharacterSelect') {
+        // Host receives guest's character selection
+        setSelectedShapes((prev) => ({ ...prev, right: data.shape }));
       } else if (data.type === 'hostState') {
         // Guest receives full state sync including right player position
         const state = gameStateRef.current;
@@ -920,7 +929,7 @@ const SlimeSoccer = () => {
         console.warn('[remote] connection timed out');
         setConnectionStatus('failed');
       }
-    }, 30000);
+    }, 60000);
   }, [connectSignaling, connectionStatus, sendSignalingMessage]);
 
   // Copy link to clipboard
@@ -1026,6 +1035,19 @@ const SlimeSoccer = () => {
       sendData({ type: 'timeLeft', timeLeft });
     }
   }, [timeLeft, remoteConnected, isHost, sendData]);
+
+  // In remote mode, proceed to ball selection when both characters are selected
+  useEffect(() => {
+    if (
+      playerMode === 'remote' &&
+      isHost &&
+      selectionStep === 'shape' &&
+      selectedShapes.left &&
+      selectedShapes.right
+    ) {
+      setSelectionStep('ball');
+    }
+  }, [playerMode, isHost, selectionStep, selectedShapes.left, selectedShapes.right]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -2706,201 +2728,116 @@ const SlimeSoccer = () => {
       {selectionStep === 'shape' && (
         <div className="text-center">
           <h2 className="text-3xl font-bold mb-6 text-green-400">{t('selectShape')}</h2>
-          <p className="mb-4 text-gray-300">
-            {playerMode === 'multi' ? t('player1') : t('chooseCharacter')}
-          </p>
-          
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-            <ShapeButton
-              shape="helmetCamo"
-              label={t('helmetCamo')}
-              onClick={() => {
-                setSelectedShapes((prev) => {
-                  const key = playerMode === 'single' ? 'right' : 'left';
-                  const next = { ...prev, [key]: 'helmetCamo' };
-                  if (playerMode === 'single') {
-                    next.left = pickRandomShape('helmetCamo');
-                  }
-                  return next;
-                });
-                if (playerMode === 'single') {
-                  setSelectionStep('ball');
-                }
-              }}
-              selected={(playerMode === 'single' ? selectedShapes.right : selectedShapes.left) === 'helmetCamo'}
-            />
-            <ShapeButton
-              shape="helmetDesert"
-              label={t('helmetDesert')}
-              onClick={() => {
-                setSelectedShapes((prev) => {
-                  const key = playerMode === 'single' ? 'right' : 'left';
-                  const next = { ...prev, [key]: 'helmetDesert' };
-                  if (playerMode === 'single') {
-                    next.left = pickRandomShape('helmetDesert');
-                  }
-                  return next;
-                });
-                if (playerMode === 'single') {
-                  setSelectionStep('ball');
-                }
-              }}
-              selected={(playerMode === 'single' ? selectedShapes.right : selectedShapes.left) === 'helmetDesert'}
-            />
-            <ShapeButton
-              shape="helmetUrban"
-              label={t('helmetUrban')}
-              onClick={() => {
-                setSelectedShapes((prev) => {
-                  const key = playerMode === 'single' ? 'right' : 'left';
-                  const next = { ...prev, [key]: 'helmetUrban' };
-                  if (playerMode === 'single') {
-                    next.left = pickRandomShape('helmetUrban');
-                  }
-                  return next;
-                });
-                if (playerMode === 'single') {
-                  setSelectionStep('ball');
-                }
-              }}
-              selected={(playerMode === 'single' ? selectedShapes.right : selectedShapes.left) === 'helmetUrban'}
-            />
-            <ShapeButton
-              shape="labrador"
-              label={t('labrador')}
-              onClick={() => {
-                setSelectedShapes((prev) => {
-                  const key = playerMode === 'single' ? 'right' : 'left';
-                  const next = { ...prev, [key]: 'labrador' };
-                  if (playerMode === 'single') {
-                    next.left = pickRandomShape('labrador');
-                  }
-                  return next;
-                });
-                if (playerMode === 'single') {
-                  setSelectionStep('ball');
-                }
-              }}
-              selected={(playerMode === 'single' ? selectedShapes.right : selectedShapes.left) === 'labrador'}
-            />
-            <ShapeButton
-              shape="tank"
-              label={t('tank')}
-              onClick={() => {
-                setSelectedShapes((prev) => {
-                  const key = playerMode === 'single' ? 'right' : 'left';
-                  const next = { ...prev, [key]: 'tank' };
-                  if (playerMode === 'single') {
-                    next.left = pickRandomShape('tank');
-                  }
-                  return next;
-                });
-                if (playerMode === 'single') {
-                  setSelectionStep('ball');
-                }
-              }}
-              selected={(playerMode === 'single' ? selectedShapes.right : selectedShapes.left) === 'tank'}
-            />
-            <ShapeButton
-              shape="sunflower"
-              label={t('sunflower')}
-              onClick={() => {
-                setSelectedShapes((prev) => {
-                  const key = playerMode === 'single' ? 'right' : 'left';
-                  const next = { ...prev, [key]: 'sunflower' };
-                  if (playerMode === 'single') {
-                    next.left = pickRandomShape('sunflower');
-                  }
-                  return next;
-                });
-                if (playerMode === 'single') {
-                  setSelectionStep('ball');
-                }
-              }}
-              selected={(playerMode === 'single' ? selectedShapes.right : selectedShapes.left) === 'sunflower'}
-            />
-          </div>
-          
-          {(playerMode === 'multi' || playerMode === 'remote') && selectedShapes.left && !selectedShapes.right && (
+
+          {/* Remote mode - Guest selects their own character */}
+          {playerMode === 'remote' && !isHost && (
             <>
-              <p className="mb-4 text-gray-300 mt-6">{t('player2')}</p>
+              <p className="mb-4 text-gray-300">{t('chooseCharacter')}</p>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-            <ShapeButton
-              shape="helmetCamo"
-              label={t('helmetCamo')}
-              onClick={() => {
-                setSelectedShapes((prev) => ({
-                  ...prev,
-                  right: 'helmetCamo',
-                }));
-                setSelectionStep('ball');
-              }}
-              selected={selectedShapes.right === 'helmetCamo'}
-            />
-            <ShapeButton
-              shape="helmetDesert"
-              label={t('helmetDesert')}
-              onClick={() => {
-                setSelectedShapes((prev) => ({
-                  ...prev,
-                  right: 'helmetDesert',
-                }));
-                setSelectionStep('ball');
-              }}
-              selected={selectedShapes.right === 'helmetDesert'}
-            />
-            <ShapeButton
-              shape="helmetUrban"
-              label={t('helmetUrban')}
-              onClick={() => {
-                setSelectedShapes((prev) => ({
-                  ...prev,
-                  right: 'helmetUrban',
-                }));
-                setSelectionStep('ball');
-              }}
-              selected={selectedShapes.right === 'helmetUrban'}
-            />
-            <ShapeButton
-              shape="labrador"
-              label={t('labrador')}
-              onClick={() => {
-                setSelectedShapes((prev) => ({
-                  ...prev,
-                  right: 'labrador',
-                }));
-                setSelectionStep('ball');
-              }}
-              selected={selectedShapes.right === 'labrador'}
-            />
-            <ShapeButton
-              shape="tank"
-              label={t('tank')}
-              onClick={() => {
-                setSelectedShapes((prev) => ({
-                  ...prev,
-                  right: 'tank',
-                }));
-                setSelectionStep('ball');
-              }}
-              selected={selectedShapes.right === 'tank'}
-            />
-            <ShapeButton
-              shape="sunflower"
-              label={t('sunflower')}
-              onClick={() => {
-                setSelectedShapes((prev) => ({
-                  ...prev,
-                  right: 'sunflower',
-                }));
-                setSelectionStep('ball');
-              }}
-              selected={selectedShapes.right === 'sunflower'}
-            />
-          </div>
+                {AVAILABLE_SHAPES.map((shape) => (
+                  <ShapeButton
+                    key={shape}
+                    shape={shape}
+                    label={t(shape)}
+                    onClick={() => {
+                      setSelectedShapes((prev) => ({ ...prev, right: shape }));
+                      sendData({ type: 'guestCharacterSelect', shape });
+                    }}
+                    selected={selectedShapes.right === shape}
+                  />
+                ))}
+              </div>
+              {selectedShapes.right && (
+                <p className="text-gray-400 text-sm mt-4">{t('waitingForPlayer')}</p>
+              )}
             </>
           )}
-          
+
+          {/* Remote mode - Host selects their character and waits for guest */}
+          {playerMode === 'remote' && isHost && (
+            <>
+              {!selectedShapes.left && (
+                <>
+                  <p className="mb-4 text-gray-300">{t('chooseCharacter')}</p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+                    {AVAILABLE_SHAPES.map((shape) => (
+                      <ShapeButton
+                        key={shape}
+                        shape={shape}
+                        label={t(shape)}
+                        onClick={() => {
+                          setSelectedShapes((prev) => ({ ...prev, left: shape }));
+                          // Notify guest about selection step and host's choice
+                          sendData({ type: 'selectionStep', step: 'shape', hostShape: shape });
+                        }}
+                        selected={selectedShapes.left === shape}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+              {selectedShapes.left && !selectedShapes.right && (
+                <div className="flex flex-col items-center gap-4">
+                  <p className="text-gray-300">{t('waitingForPlayer')}</p>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-400"></div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Single player and local multiplayer modes */}
+          {playerMode !== 'remote' && (
+            <>
+              <p className="mb-4 text-gray-300">
+                {playerMode === 'multi' ? t('player1') : t('chooseCharacter')}
+              </p>
+
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+                {AVAILABLE_SHAPES.map((shape) => (
+                  <ShapeButton
+                    key={shape}
+                    shape={shape}
+                    label={t(shape)}
+                    onClick={() => {
+                      setSelectedShapes((prev) => {
+                        const key = playerMode === 'single' ? 'right' : 'left';
+                        const next = { ...prev, [key]: shape };
+                        if (playerMode === 'single') {
+                          next.left = pickRandomShape(shape);
+                        }
+                        return next;
+                      });
+                      if (playerMode === 'single') {
+                        setSelectionStep('ball');
+                      }
+                    }}
+                    selected={(playerMode === 'single' ? selectedShapes.right : selectedShapes.left) === shape}
+                  />
+                ))}
+              </div>
+
+              {playerMode === 'multi' && selectedShapes.left && !selectedShapes.right && (
+                <>
+                  <p className="mb-4 text-gray-300 mt-6">{t('player2')}</p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+                    {AVAILABLE_SHAPES.map((shape) => (
+                      <ShapeButton
+                        key={shape}
+                        shape={shape}
+                        label={t(shape)}
+                        onClick={() => {
+                          setSelectedShapes((prev) => ({ ...prev, right: shape }));
+                          setSelectionStep('ball');
+                        }}
+                        selected={selectedShapes.right === shape}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
           <div className="flex gap-4 justify-center mt-6">
             <button
               onClick={() => {
