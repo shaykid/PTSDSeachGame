@@ -1237,8 +1237,8 @@ const SlimeSoccer = () => {
     const fadeDuration = 0;
     const visibleDuration = 1000;
     const pauseDuration = 0;
-    // Allow images to appear from header to footer (5% to 95% of screen)
-    const minCenterOffset = 5;
+    // Keep round history images below the button area (lower 30% of the screen).
+    const minCenterOffset = 70;
     const maxCenterOffset = 95;
 
     const scheduleCycle = () => {
