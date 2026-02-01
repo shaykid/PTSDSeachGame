@@ -1156,6 +1156,12 @@ const SlimeSoccer = () => {
   useEffect(() => {
     goalAudioRef.current = new Audio(`${resourceBaseUrl}/croud.mp3`);
     idleAudioRef.current = new Audio(`${resourceBaseUrl}/go.mp3`);
+    if (goalAudioRef.current) {
+      goalAudioRef.current.volume = 0.5;
+    }
+    if (idleAudioRef.current) {
+      idleAudioRef.current.volume = 0.5;
+    }
 
     return () => {
       if (goalTimeoutRef.current) {
