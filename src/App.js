@@ -274,6 +274,27 @@ const getWindowDimensions = (screenSizeConfig) => {
   return { width, height };
 };
 
+// Helper functions to normalize positions/velocities to 0-1 range for cross-device sync
+const normalizePosition = (x, y, width, height) => ({
+  x: x / width,
+  y: y / height,
+});
+
+const denormalizePosition = (normX, normY, width, height) => ({
+  x: normX * width,
+  y: normY * height,
+});
+
+const normalizeVelocity = (vx, vy, width, height) => ({
+  vx: vx / width,
+  vy: vy / height,
+});
+
+const denormalizeVelocity = (normVx, normVy, width, height) => ({
+  vx: normVx * width,
+  vy: normVy * height,
+});
+
 const SlimeSoccer = () => {
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
@@ -287,6 +308,9 @@ const SlimeSoccer = () => {
   const idleAudioRef = useRef(null);
   const idleAudioTimeoutRef = useRef(null);
   const historyImageCountRef = useRef(0);
+  // Refs for goal celebration callbacks (used for cross-device sync)
+  const playGoalSoundRef = useRef(null);
+  const triggerGoalCelebrationRef = useRef(null);
   const waitSoundPlayedRef = useRef(false);
   const multiIdleStartRef = useRef(null);
   
@@ -589,35 +613,50 @@ const SlimeSoccer = () => {
         setSelectedShapes((prev) => ({ ...prev, right: data.shape }));
       } else if (data.type === 'hostState') {
         // Guest receives full state sync including right player position
+        // Denormalize positions from 0-1 range to local screen dimensions
         const state = gameStateRef.current;
-        state.rightSlime.x = data.rightSlime.x;
-        state.rightSlime.y = data.rightSlime.y;
-        state.rightSlime.vx = data.rightSlime.vx;
-        state.rightSlime.vy = data.rightSlime.vy;
+
+        // Denormalize right slime position and velocity
+        const rightPos = denormalizePosition(data.rightSlime.x, data.rightSlime.y, GAME_WIDTH, GAME_HEIGHT);
+        const rightVel = denormalizeVelocity(data.rightSlime.vx, data.rightSlime.vy, GAME_WIDTH, GAME_HEIGHT);
+        state.rightSlime.x = rightPos.x;
+        state.rightSlime.y = rightPos.y;
+        state.rightSlime.vx = rightVel.vx;
+        state.rightSlime.vy = rightVel.vy;
         state.rightSlime.isGrabbing = data.rightSlime.isGrabbing;
         state.rightSlime.hasBall = data.rightSlime.hasBall;
         state.rightSlime.goalLineTime = data.rightSlime.goalLineTime;
 
-        state.leftSlime.x = data.leftSlime.x;
-        state.leftSlime.y = data.leftSlime.y;
-        state.leftSlime.vx = data.leftSlime.vx;
-        state.leftSlime.vy = data.leftSlime.vy;
+        // Denormalize left slime position and velocity
+        const leftPos = denormalizePosition(data.leftSlime.x, data.leftSlime.y, GAME_WIDTH, GAME_HEIGHT);
+        const leftVel = denormalizeVelocity(data.leftSlime.vx, data.leftSlime.vy, GAME_WIDTH, GAME_HEIGHT);
+        state.leftSlime.x = leftPos.x;
+        state.leftSlime.y = leftPos.y;
+        state.leftSlime.vx = leftVel.vx;
+        state.leftSlime.vy = leftVel.vy;
         state.leftSlime.isGrabbing = data.leftSlime.isGrabbing;
         state.leftSlime.hasBall = data.leftSlime.hasBall;
         state.leftSlime.goalLineTime = data.leftSlime.goalLineTime;
 
-        state.ball.x = data.ball.x;
-        state.ball.y = data.ball.y;
-        state.ball.vx = data.ball.vx;
-        state.ball.vy = data.ball.vy;
+        // Denormalize ball position and velocity
+        const ballPos = denormalizePosition(data.ball.x, data.ball.y, GAME_WIDTH, GAME_HEIGHT);
+        const ballVel = denormalizeVelocity(data.ball.vx, data.ball.vy, GAME_WIDTH, GAME_HEIGHT);
+        state.ball.x = ballPos.x;
+        state.ball.y = ballPos.y;
+        state.ball.vx = ballVel.vx;
+        state.ball.vy = ballVel.vy;
         state.ball.grabbedBy = data.ball.grabbedBy;
         state.ball.grabAngle = data.ball.grabAngle;
         state.ball.grabAngularVelocity = data.ball.grabAngularVelocity;
+      } else if (data.type === 'goalCelebration') {
+        // Guest receives goal celebration notification from host
+        if (playGoalSoundRef.current) playGoalSoundRef.current();
+        if (triggerGoalCelebrationRef.current) triggerGoalCelebrationRef.current();
       }
     } catch (e) {
       console.error('Error parsing peer data:', e);
     }
-  }, [isHost, logDataChannelEvent, logDocumentAction]);
+  }, [isHost, logDataChannelEvent, logDocumentAction, GAME_WIDTH, GAME_HEIGHT]);
 
   // Setup data channel event handlers
   const setupDataChannel = useCallback((channel) => {
@@ -952,36 +991,45 @@ const SlimeSoccer = () => {
   }, []);
 
   // Sync game state over network (host sends state to guest)
+  // Positions are normalized to 0-1 range for cross-device compatibility
   useEffect(() => {
     if (!gameStarted || !remoteConnected || !isHost) return;
 
     const syncInterval = setInterval(() => {
       const state = gameStateRef.current;
+      // Normalize positions and velocities to 0-1 range based on host's screen dimensions
+      const leftPos = normalizePosition(state.leftSlime.x, state.leftSlime.y, GAME_WIDTH, GAME_HEIGHT);
+      const leftVel = normalizeVelocity(state.leftSlime.vx, state.leftSlime.vy, GAME_WIDTH, GAME_HEIGHT);
+      const rightPos = normalizePosition(state.rightSlime.x, state.rightSlime.y, GAME_WIDTH, GAME_HEIGHT);
+      const rightVel = normalizeVelocity(state.rightSlime.vx, state.rightSlime.vy, GAME_WIDTH, GAME_HEIGHT);
+      const ballPos = normalizePosition(state.ball.x, state.ball.y, GAME_WIDTH, GAME_HEIGHT);
+      const ballVel = normalizeVelocity(state.ball.vx, state.ball.vy, GAME_WIDTH, GAME_HEIGHT);
+
       sendData({
         type: 'hostState',
         leftSlime: {
-          x: state.leftSlime.x,
-          y: state.leftSlime.y,
-          vx: state.leftSlime.vx,
-          vy: state.leftSlime.vy,
+          x: leftPos.x,
+          y: leftPos.y,
+          vx: leftVel.vx,
+          vy: leftVel.vy,
           isGrabbing: state.leftSlime.isGrabbing,
           hasBall: state.leftSlime.hasBall,
           goalLineTime: state.leftSlime.goalLineTime,
         },
         rightSlime: {
-          x: state.rightSlime.x,
-          y: state.rightSlime.y,
-          vx: state.rightSlime.vx,
-          vy: state.rightSlime.vy,
+          x: rightPos.x,
+          y: rightPos.y,
+          vx: rightVel.vx,
+          vy: rightVel.vy,
           isGrabbing: state.rightSlime.isGrabbing,
           hasBall: state.rightSlime.hasBall,
           goalLineTime: state.rightSlime.goalLineTime,
         },
         ball: {
-          x: state.ball.x,
-          y: state.ball.y,
-          vx: state.ball.vx,
-          vy: state.ball.vy,
+          x: ballPos.x,
+          y: ballPos.y,
+          vx: ballVel.vx,
+          vy: ballVel.vy,
           grabbedBy: state.ball.grabbedBy,
           grabAngle: state.ball.grabAngle,
           grabAngularVelocity: state.ball.grabAngularVelocity,
@@ -990,7 +1038,7 @@ const SlimeSoccer = () => {
     }, 1000 / 30); // 30 times per second
 
     return () => clearInterval(syncInterval);
-  }, [gameStarted, remoteConnected, isHost, sendData]);
+  }, [gameStarted, remoteConnected, isHost, sendData, GAME_WIDTH, GAME_HEIGHT]);
 
   // Send local input to peer
   useEffect(() => {
@@ -1227,6 +1275,12 @@ const SlimeSoccer = () => {
       setShowGoalCelebration(false);
     }, 1000);
   }, []);
+
+  // Update refs for goal callbacks (used for cross-device sync)
+  useEffect(() => {
+    playGoalSoundRef.current = playGoalSound;
+    triggerGoalCelebrationRef.current = triggerGoalCelebration;
+  }, [playGoalSound, triggerGoalCelebration]);
   
   const drawCannabisLeaf = (ctx, x, y, size) => {
     ctx.save();
@@ -1898,11 +1952,19 @@ const SlimeSoccer = () => {
     if (state.ball.x <= BALL_RADIUS && state.ball.y > GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT) {
       playGoalSound();
       triggerGoalCelebration();
+      // Send goal celebration to guest player
+      if (playerMode === 'remote' && remoteConnected && isHost) {
+        sendData({ type: 'goalCelebration' });
+      }
       setScore(prev => ({ ...prev, right: prev.right + 1 }));
       resetPositions();
     } else if (state.ball.x >= GAME_WIDTH - BALL_RADIUS && state.ball.y > GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT) {
       playGoalSound();
       triggerGoalCelebration();
+      // Send goal celebration to guest player
+      if (playerMode === 'remote' && remoteConnected && isHost) {
+        sendData({ type: 'goalCelebration' });
+      }
       setScore(prev => ({ ...prev, left: prev.left + 1 }));
       resetPositions();
     }
@@ -1982,6 +2044,8 @@ const SlimeSoccer = () => {
     playGoalSound,
     triggerGoalCelebration,
     updateAI,
+    sendData,
+    remoteConnected,
   ]);
 
   const drawHelmet = (ctx, x, y, radius, type) => {
