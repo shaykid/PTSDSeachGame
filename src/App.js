@@ -2714,13 +2714,7 @@ const SlimeSoccer = () => {
 
                   <p className="text-gray-400 mt-4">{t('orShareLink')}</p>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={shareLinkToMobile}
-                      className={`px-4 py-2 rounded ${lightButtonClasses}`}
-                    >
-                      {t('shareLink')}
-                    </button>
+                  <div className="flex flex-col items-center gap-2">
                     <input
                       type="text"
                       readOnly
@@ -2728,12 +2722,20 @@ const SlimeSoccer = () => {
                       className="px-3 py-2 rounded bg-green-800 text-white text-sm w-64 truncate"
                       onClick={(e) => e.target.select()}
                     />
-                    <button
-                      onClick={copyLinkToClipboard}
-                      className={`px-4 py-2 rounded ${lightButtonClasses}`}
-                    >
-                      {linkCopied ? t('linkCopied') : t('copyLink')}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={shareLinkToMobile}
+                        className={`px-4 py-2 rounded ${lightButtonClasses}`}
+                      >
+                        {t('shareLink')}
+                      </button>
+                      <button
+                        onClick={copyLinkToClipboard}
+                        className={`px-4 py-2 rounded ${lightButtonClasses}`}
+                      >
+                        {linkCopied ? t('linkCopied') : t('copyLink')}
+                      </button>
+                    </div>
                   </div>
 
                   {connectionStatus === 'waiting' && (
