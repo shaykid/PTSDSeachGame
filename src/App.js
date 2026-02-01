@@ -2570,7 +2570,7 @@ const SlimeSoccer = () => {
     instructionVisibility,
     score,
     selectedShapes,
-    selectedBall
+    selectedBall,
     playerMode   
   ]);
 
