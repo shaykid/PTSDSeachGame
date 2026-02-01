@@ -2848,6 +2848,7 @@ const SlimeSoccer = () => {
                 <div className="flex flex-col items-center gap-4">
                   <p className="text-green-400 text-xl">{t('connected')}</p>
                   <p className="text-gray-300">{t('youAreGuest')}</p>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-400"></div>
                   <p className="text-gray-400 text-sm whitespace-pre-line">{t('guestWaitingMessage')}</p>
                 </div>
               )}
@@ -2908,7 +2909,10 @@ const SlimeSoccer = () => {
                 ))}
               </div>
               {selectedShapes.right && (
-                <p className="text-gray-400 text-sm mt-4 whitespace-pre-line">{t('guestWaitingMessage')}</p>
+                <div className="flex flex-col items-center gap-4 mt-4">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-400"></div>
+                  <p className="text-gray-400 text-sm whitespace-pre-line">{t('guestWaitingMessage')}</p>
+                </div>
               )}
             </>
           )}
@@ -2938,8 +2942,8 @@ const SlimeSoccer = () => {
               )}
               {selectedShapes.left && !selectedShapes.right && (
                 <div className="flex flex-col items-center gap-4">
-                  <p className="text-gray-300">{t('waitingForPlayer')}</p>
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-400"></div>
+                  <p className="text-gray-400 text-sm whitespace-pre-line">{t('guestWaitingMessage')}</p>
                 </div>
               )}
             </>
