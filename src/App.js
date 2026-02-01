@@ -981,6 +981,22 @@ const SlimeSoccer = () => {
     }).catch(console.error);
   }, [roomId, getJoinUrl]);
 
+  // Share link using Web Share API
+  const shareLinkToMobile = useCallback(() => {
+    if (!roomId) return;
+    const joinUrl = getJoinUrl(roomId);
+    if (navigator.share) {
+      navigator.share({
+        title: '💎אליפות יהלומים💎',
+        text: 'הוזמנת למשחק 💎אליפות יהלומים💎 בכדורגל',
+        url: joinUrl
+      }).catch(console.error);
+    } else {
+      // Fallback to copy if Web Share API is not available
+      copyLinkToClipboard();
+    }
+  }, [roomId, getJoinUrl, copyLinkToClipboard]);
+
   // Check for room ID in URL on mount
   useEffect(() => {
     const urlRoomId = parseRoomIdFromUrl();
@@ -2699,6 +2715,12 @@ const SlimeSoccer = () => {
                   <p className="text-gray-400 mt-4">{t('orShareLink')}</p>
 
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={shareLinkToMobile}
+                      className={`px-4 py-2 rounded ${lightButtonClasses}`}
+                    >
+                      {t('shareLink')}
+                    </button>
                     <input
                       type="text"
                       readOnly
