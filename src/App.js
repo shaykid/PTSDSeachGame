@@ -55,8 +55,8 @@ const TRANSLATIONS = {
     "startRemoteGame": "התחל משחק",
     "orShareLink": "או שתפו את הקישור:",
     "guestWaitingMessage": "סבלנות\nמחכה לתגובת החבר",
-    "gameInstruction1": "מטרת המשחק - להכניס כמה שיותר גולים לשער",
-    "gameInstruction2": "יש להשתמש במקשי החיצים שעל המסך להזיז את השחקן",
+    "gameInstruction1": "המטרה - להבקיע גולים לשער",
+    "gameInstruction2": "השתמשו במקשי החיצים שעל המסך",
     "shareInviteIntro": "הוזמנת למשחק 💎אליפות יהלומים💎 בכדורגל"
   }
 };
