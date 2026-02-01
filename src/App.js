@@ -320,6 +320,7 @@ const SlimeSoccer = () => {
   const signalingQueueRef = useRef([]);
   const roomIdRef = useRef(null);
   const pendingIceCandidatesRef = useRef([]);
+  const isHostRef = useRef(false);
 
   const logDocumentAction = useCallback((action, details = {}) => {
     console.log('[document-action]', action, {
@@ -788,12 +789,12 @@ const SlimeSoccer = () => {
     try {
       const message = JSON.parse(event.data);
       console.log('[signaling] received message', message.type, message.roomId);
-      if (message.type === 'offer' && !isHost) {
+      if (message.type === 'offer' && !isHostRef.current) {
         const answer = await createAnswer(message.offer);
         if (answer) {
           sendSignalingMessage({ type: 'answer', roomId: roomIdRef.current, answer });
         }
-      } else if (message.type === 'answer' && isHost) {
+      } else if (message.type === 'answer' && isHostRef.current) {
         await handleAnswer(message.answer);
       } else if (message.type === 'iceCandidate') {
         const pc = peerConnectionRef.current;
@@ -818,7 +819,7 @@ const SlimeSoccer = () => {
     } catch (error) {
       console.error('Error handling signaling message:', error);
     }
-  }, [createAnswer, handleAnswer, isHost, sendSignalingMessage]);
+  }, [createAnswer, handleAnswer, sendSignalingMessage]);
 
   const connectSignaling = useCallback(() => {
     const existingSocket = signalingSocketRef.current;
@@ -875,6 +876,7 @@ const SlimeSoccer = () => {
     console.log('[remote] start hosting', newRoomId);
     setRoomId(newRoomId);
     setIsHost(true);
+    isHostRef.current = true;
     setConnectionStatus('waiting');
     setPlayerMode('remote');
     setSelectionStep('remoteSetup');
@@ -901,6 +903,7 @@ const SlimeSoccer = () => {
     roomIdRef.current = roomIdToJoin; // Set ref immediately for use in callbacks
     setRoomId(roomIdToJoin);
     setIsHost(false);
+    isHostRef.current = false;
     setConnectionStatus('connecting');
     setPlayerMode('remote');
     try {
