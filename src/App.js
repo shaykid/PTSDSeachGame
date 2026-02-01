@@ -56,7 +56,7 @@ const TRANSLATIONS = {
     "orShareLink": "או שתפו את הקישור:",
     "guestWaitingMessage": "סבלנות\nמחכה לתגובת החבר",
     "gameInstruction1": "המטרה - להבקיע גולים לשער",
-    "gameInstruction2": "השתמשו במקשי החיצים שעל המסך",
+    "gameInstruction2": "שימוש במקשי החיצים על המסך",
     "shareInviteIntro": "הוזמנת למשחק 💎אליפות יהלומים💎 בכדורגל"
   }
 };
