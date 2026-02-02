@@ -57,6 +57,7 @@ const TRANSLATIONS = {
     "guestWaitingMessage": "סבלנות\nמחכה לתגובת החבר",
     "gameInstruction1": "המטרה - להבקיע גולים לשער",
     "gameInstruction2": "שימוש במקשי החיצים על המסך",
+    "gameInstruction2Touch": "לחץ על המסך להזזת השחקן",
     "shareInviteIntro": "הוזמנת למשחק 💎אליפות יהלומים💎 בכדורגל"
   }
 };
@@ -93,6 +94,15 @@ const WAIT_START = Number(
 const BUTTON_WAIT = Number(
   process.env.REACT_APP_BUTTON_WAIT ?? process.env.BUTTON_WAIT ?? 5
 ) || 5;
+const CONTROL_MODE = (() => {
+  const val = (process.env.REACT_APP_CONTROL ?? process.env.CONTROL ?? 'both').toLowerCase();
+  return ['keys', 'touch', 'both'].includes(val) ? val : 'both';
+})();
+const DISPLAY_TOUCH_MODE = (() => {
+  const val = (process.env.REACT_APP_DISPLAY_TOUCH ?? process.env.DISPLAY_TOUCH ?? 'personal').toLowerCase();
+  return ['none', 'personal', 'both'].includes(val) ? val : 'personal';
+})();
+const TOUCH_MOVE_MIN_KEYS = 2;
 const HISTORY_IMAGE_FILES = [
   '0bb921c5-b38c-4aa1-bed0-678ab0d8fa08.jpeg',
   '0f9a6eb6-b7ce-48b4-a477-5eaf7ee7dd15.jpeg',
@@ -341,6 +351,13 @@ const SlimeSoccer = () => {
     position: { x: 0, y: 0 },
     visible: false
   });
+  // Touch control state
+  const [blinkingKeys, setBlinkingKeys] = useState({});
+  const touchTargetRef = useRef({ left: null, right: null }); // Target position for touch-to-move
+  const touchKeysCountRef = useRef({ left: 0, right: 0 }); // Count of simulated key presses
+  const touchActiveRef = useRef({ left: false, right: false }); // Whether touch is active
+  const touchIndicatorsRef = useRef([]); // Array of touch indicators for fingerprint display
+  const fingerprintImageRef = useRef(null); // Fingerprint image for touch display
 
   // Remote multiplayer state
   const [roomId, setRoomId] = useState(null);
@@ -662,6 +679,19 @@ const SlimeSoccer = () => {
         // Guest receives goal celebration notification from host
         if (playGoalSoundRef.current) playGoalSoundRef.current();
         if (triggerGoalCelebrationRef.current) triggerGoalCelebrationRef.current();
+      } else if (data.type === 'touch' && DISPLAY_TOUCH_MODE === 'both') {
+        // Show remote player's touch indicator
+        const x = data.x * GAME_WIDTH;
+        const y = data.y * GAME_HEIGHT;
+        const playerId = isHost ? 'right' : 'left';
+        touchIndicatorsRef.current.push({
+          x,
+          y,
+          playerId,
+          isLocal: false,
+          createdAt: Date.now(),
+          opacity: 0.7
+        });
       }
     } catch (e) {
       console.error('Error parsing peer data:', e);
@@ -1151,6 +1181,15 @@ const SlimeSoccer = () => {
     logoImg.onload = () => {
       logoImageRef.current = logoImg;
     };
+
+    // Load fingerprint image for touch display
+    if (DISPLAY_TOUCH_MODE !== 'none') {
+      const fingerprintImg = new Image();
+      fingerprintImg.src = `${resourceBaseUrl}/fingerprint.png`;
+      fingerprintImg.onload = () => {
+        fingerprintImageRef.current = fingerprintImg;
+      };
+    }
   }, [GAME_HEIGHT, GAME_WIDTH, resourceBaseUrl]);
 
   useEffect(() => {
@@ -2403,7 +2442,8 @@ const SlimeSoccer = () => {
       instructionLines.push(t('gameInstruction1'));
     }
     if (instructionVisibility.line2) {
-      instructionLines.push(t('gameInstruction2'));
+      // Use touch instruction when CONTROL_MODE is 'touch'
+      instructionLines.push(t(CONTROL_MODE === 'touch' ? 'gameInstruction2Touch' : 'gameInstruction2'));
     }
 
     if (instructionLines.length > 0) {
@@ -2567,6 +2607,68 @@ const SlimeSoccer = () => {
     // Draw ball
     const ballType = selectedBall || 'cannabis';
     drawBall(ctx, state.ball.x, state.ball.y, BALL_RADIUS, ballType);
+
+    // Draw touch indicators (fingerprint effect)
+    if (DISPLAY_TOUCH_MODE !== 'none') {
+      const now = Date.now();
+      const indicatorLifespan = 500; // 500ms fade out
+
+      // Remove expired indicators and update opacity
+      touchIndicatorsRef.current = touchIndicatorsRef.current.filter(indicator => {
+        const age = now - indicator.createdAt;
+        if (age > indicatorLifespan) return false;
+        indicator.opacity = 0.7 * (1 - age / indicatorLifespan);
+        return true;
+      });
+
+      // Draw each indicator
+      touchIndicatorsRef.current.forEach(indicator => {
+        ctx.save();
+        ctx.globalAlpha = indicator.opacity;
+
+        // Different colors for different players
+        const isLeftPlayer = indicator.playerId === 'left';
+        const baseColor = indicator.isLocal
+          ? (isLeftPlayer ? '#00BFFF' : '#FF6B6B')  // Cyan for left, coral for right (local)
+          : (isLeftPlayer ? '#4169E1' : '#DC143C'); // Royal blue / crimson (remote)
+
+        // Draw fingerprint-style ellipse
+        const width = 40;
+        const height = 50;
+
+        // Outer glow
+        ctx.shadowColor = baseColor;
+        ctx.shadowBlur = 15;
+
+        // Draw ellipse with fingerprint pattern
+        ctx.strokeStyle = baseColor;
+        ctx.lineWidth = 2;
+
+        // Main ellipse
+        ctx.beginPath();
+        ctx.ellipse(indicator.x, indicator.y, width / 2, height / 2, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Inner fingerprint lines
+        ctx.lineWidth = 1;
+        for (let i = 0.3; i <= 0.9; i += 0.2) {
+          ctx.beginPath();
+          ctx.ellipse(indicator.x, indicator.y, (width / 2) * i, (height / 2) * i, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        // Horizontal ridge lines
+        ctx.beginPath();
+        for (let y = -height / 3; y <= height / 3; y += 8) {
+          const xOffset = Math.sqrt(1 - (y / (height / 2)) ** 2) * (width / 2) * 0.8;
+          ctx.moveTo(indicator.x - xOffset, indicator.y + y);
+          ctx.lineTo(indicator.x + xOffset, indicator.y + y);
+        }
+        ctx.stroke();
+
+        ctx.restore();
+      });
+    }
   }, [
     GAME_HEIGHT,
     GAME_WIDTH,
@@ -2577,7 +2679,7 @@ const SlimeSoccer = () => {
     score,
     selectedShapes,
     selectedBall,
-    playerMode   
+    playerMode
   ]);
 
   const gameLoop = useCallback((currentTime) => {
@@ -2637,55 +2739,247 @@ const SlimeSoccer = () => {
     keysRef.current[key] = pressed;
   }, []);
 
-  const TouchButton = ({ label, actionKey }) => (
-    <button
-      type="button"
-      className="touch-button"
-      onPointerDown={(event) => {
-        event.preventDefault();
-        event.currentTarget.setPointerCapture(event.pointerId);
-        logDocumentAction('pointerdown', {
-          actionKey,
-          label,
-          pointerId: event.pointerId,
-          pointerType: event.pointerType,
-        });
-        setKeyState(actionKey, true);
-      }}
-      onPointerUp={(event) => {
-        event.preventDefault();
-        logDocumentAction('pointerup', {
-          actionKey,
-          label,
-          pointerId: event.pointerId,
-          pointerType: event.pointerType,
-        });
-        setKeyState(actionKey, false);
-      }}
-      onPointerCancel={(event) => {
-        event.preventDefault();
-        logDocumentAction('pointercancel', {
-          actionKey,
-          label,
-          pointerId: event.pointerId,
-          pointerType: event.pointerType,
-        });
-        setKeyState(actionKey, false);
-      }}
-      onPointerLeave={(event) => {
-        event.preventDefault();
-        logDocumentAction('pointerleave', {
-          actionKey,
-          label,
-          pointerId: event.pointerId,
-          pointerType: event.pointerType,
-        });
-        setKeyState(actionKey, false);
-      }}
-    >
-      {label}
-    </button>
-  );
+  // Simulate key press with blink effect (for touch-to-move in 'both' mode)
+  const simulateKey = useCallback((key, pressed) => {
+    keysRef.current[key] = pressed;
+    if (CONTROL_MODE === 'both' && pressed) {
+      setBlinkingKeys(prev => ({ ...prev, [key]: true }));
+      setTimeout(() => {
+        setBlinkingKeys(prev => ({ ...prev, [key]: false }));
+      }, 100);
+    }
+  }, []);
+
+  // Get canvas coordinates from pointer event
+  const getCanvasCoords = useCallback((event) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+      x: (event.clientX - rect.left) * scaleX,
+      y: (event.clientY - rect.top) * scaleY
+    };
+  }, []);
+
+  // Handle touch-to-move for a specific player
+  const handleTouchMove = useCallback((playerSide, targetX, targetY) => {
+    if (CONTROL_MODE === 'keys') return;
+
+    const state = gameStateRef.current;
+    const player = playerSide === 'left' ? state.leftSlime : state.rightSlime;
+    const keys = playerSide === 'left'
+      ? { left: 'a', right: 'd', up: 'w', down: 's' }
+      : { left: 'arrowleft', right: 'arrowright', up: 'arrowup', down: 'arrowdown' };
+
+    // Calculate direction to target
+    const dx = targetX - player.x;
+    const dy = targetY - player.y;
+    const threshold = 20; // Dead zone
+
+    // Horizontal movement
+    if (Math.abs(dx) > threshold) {
+      if (dx < 0) {
+        simulateKey(keys.right, false);
+        simulateKey(keys.left, true);
+      } else {
+        simulateKey(keys.left, false);
+        simulateKey(keys.right, true);
+      }
+    } else {
+      simulateKey(keys.left, false);
+      simulateKey(keys.right, false);
+    }
+
+    // Jump if target is significantly above player (and player is on ground)
+    if (dy < -50 && player.y >= GAME_HEIGHT - GROUND_HEIGHT - 1) {
+      simulateKey(keys.up, true);
+      setTimeout(() => simulateKey(keys.up, false), 100);
+    }
+
+    // Update key count
+    touchKeysCountRef.current[playerSide]++;
+  }, [simulateKey, GAME_HEIGHT, GROUND_HEIGHT]);
+
+  // Add touch indicator for fingerprint display
+  const addTouchIndicator = useCallback((x, y, playerId, isLocal = true) => {
+    if (DISPLAY_TOUCH_MODE === 'none') return;
+    if (DISPLAY_TOUCH_MODE === 'personal' && !isLocal) return;
+
+    const indicator = {
+      x,
+      y,
+      playerId,
+      isLocal,
+      createdAt: Date.now(),
+      opacity: 0.7
+    };
+    touchIndicatorsRef.current.push(indicator);
+  }, []);
+
+  // Canvas touch handlers for touch-to-move
+  const handleCanvasPointerDown = useCallback((event) => {
+    if (CONTROL_MODE === 'keys') return;
+    if (!gameStarted) return;
+
+    event.preventDefault();
+    const coords = getCanvasCoords(event);
+    if (!coords) return;
+
+    // Add touch indicator
+    addTouchIndicator(coords.x, coords.y, isHost ? 'left' : 'right', true);
+
+    // Determine which player this controls based on position and mode
+    let playerSide;
+    if (playerMode === 'single' || playerMode === 'remote') {
+      playerSide = isHost ? 'left' : 'right';
+      if (playerMode === 'single') playerSide = 'right';
+    } else {
+      // Multi mode: left half controls left player, right half controls right
+      playerSide = coords.x < GAME_WIDTH / 2 ? 'left' : 'right';
+    }
+
+    touchTargetRef.current[playerSide] = coords;
+    touchActiveRef.current[playerSide] = true;
+    touchKeysCountRef.current[playerSide] = 0;
+
+    handleTouchMove(playerSide, coords.x, coords.y);
+
+    // Send touch to remote player if needed
+    if (playerMode === 'remote' && remoteConnected && DISPLAY_TOUCH_MODE === 'both') {
+      sendData({ type: 'touch', x: coords.x / GAME_WIDTH, y: coords.y / GAME_HEIGHT });
+    }
+  }, [gameStarted, getCanvasCoords, addTouchIndicator, isHost, playerMode, handleTouchMove, remoteConnected, GAME_WIDTH, GAME_HEIGHT]);
+
+  const handleCanvasPointerMove = useCallback((event) => {
+    if (CONTROL_MODE === 'keys') return;
+    if (!gameStarted) return;
+
+    const coords = getCanvasCoords(event);
+    if (!coords) return;
+
+    // Update touch indicator position
+    if (touchIndicatorsRef.current.length > 0) {
+      const lastIndicator = touchIndicatorsRef.current[touchIndicatorsRef.current.length - 1];
+      if (lastIndicator.isLocal && Date.now() - lastIndicator.createdAt < 100) {
+        lastIndicator.x = coords.x;
+        lastIndicator.y = coords.y;
+      } else {
+        addTouchIndicator(coords.x, coords.y, isHost ? 'left' : 'right', true);
+      }
+    }
+
+    // Determine which player and update movement
+    let playerSide;
+    if (playerMode === 'single' || playerMode === 'remote') {
+      playerSide = isHost ? 'left' : 'right';
+      if (playerMode === 'single') playerSide = 'right';
+    } else {
+      playerSide = coords.x < GAME_WIDTH / 2 ? 'left' : 'right';
+    }
+
+    if (touchActiveRef.current[playerSide]) {
+      touchTargetRef.current[playerSide] = coords;
+      handleTouchMove(playerSide, coords.x, coords.y);
+
+      if (playerMode === 'remote' && remoteConnected && DISPLAY_TOUCH_MODE === 'both') {
+        sendData({ type: 'touch', x: coords.x / GAME_WIDTH, y: coords.y / GAME_HEIGHT });
+      }
+    }
+  }, [gameStarted, getCanvasCoords, addTouchIndicator, isHost, playerMode, handleTouchMove, remoteConnected, GAME_WIDTH, GAME_HEIGHT]);
+
+  const handleCanvasPointerUp = useCallback((event) => {
+    if (CONTROL_MODE === 'keys') return;
+
+    const coords = getCanvasCoords(event);
+
+    // Determine which player
+    let playerSide;
+    if (playerMode === 'single' || playerMode === 'remote') {
+      playerSide = isHost ? 'left' : 'right';
+      if (playerMode === 'single') playerSide = 'right';
+    } else if (coords) {
+      playerSide = coords.x < GAME_WIDTH / 2 ? 'left' : 'right';
+    } else {
+      // If no coords, deactivate both
+      ['left', 'right'].forEach(side => {
+        if (touchActiveRef.current[side] && touchKeysCountRef.current[side] >= TOUCH_MOVE_MIN_KEYS) {
+          touchActiveRef.current[side] = false;
+          touchTargetRef.current[side] = null;
+          const keys = side === 'left'
+            ? ['a', 'd', 'w', 's']
+            : ['arrowleft', 'arrowright', 'arrowup', 'arrowdown'];
+          keys.forEach(k => simulateKey(k, false));
+        }
+      });
+      return;
+    }
+
+    // Only release if minimum keys were simulated
+    if (touchKeysCountRef.current[playerSide] >= TOUCH_MOVE_MIN_KEYS) {
+      touchActiveRef.current[playerSide] = false;
+      touchTargetRef.current[playerSide] = null;
+
+      const keys = playerSide === 'left'
+        ? ['a', 'd', 'w', 's']
+        : ['arrowleft', 'arrowright', 'arrowup', 'arrowdown'];
+      keys.forEach(k => simulateKey(k, false));
+    }
+  }, [getCanvasCoords, isHost, playerMode, simulateKey, GAME_WIDTH]);
+
+  const TouchButton = ({ label, actionKey }) => {
+    const isBlinking = blinkingKeys[actionKey];
+    return (
+      <button
+        type="button"
+        className={`touch-button ${isBlinking ? 'touch-button-blink' : ''}`}
+        onPointerDown={(event) => {
+          event.preventDefault();
+          event.currentTarget.setPointerCapture(event.pointerId);
+          logDocumentAction('pointerdown', {
+            actionKey,
+            label,
+            pointerId: event.pointerId,
+            pointerType: event.pointerType,
+          });
+          setKeyState(actionKey, true);
+        }}
+        onPointerUp={(event) => {
+          event.preventDefault();
+          logDocumentAction('pointerup', {
+            actionKey,
+            label,
+            pointerId: event.pointerId,
+            pointerType: event.pointerType,
+          });
+          setKeyState(actionKey, false);
+        }}
+        onPointerCancel={(event) => {
+          event.preventDefault();
+          logDocumentAction('pointercancel', {
+            actionKey,
+            label,
+            pointerId: event.pointerId,
+            pointerType: event.pointerType,
+          });
+          setKeyState(actionKey, false);
+        }}
+        onPointerLeave={(event) => {
+          event.preventDefault();
+          logDocumentAction('pointerleave', {
+            actionKey,
+            label,
+            pointerId: event.pointerId,
+            pointerType: event.pointerType,
+          });
+          setKeyState(actionKey, false);
+        }}
+      >
+        {label}
+      </button>
+    );
+  };
 
   const ShapeButton = ({ shape, label, onClick, selected }) => (
     <button
@@ -3155,10 +3449,15 @@ const SlimeSoccer = () => {
               width={GAME_WIDTH}
               height={GAME_HEIGHT}
               className="border-4 border-green-700 w-full h-full game-canvas"
+              onPointerDown={handleCanvasPointerDown}
+              onPointerMove={handleCanvasPointerMove}
+              onPointerUp={handleCanvasPointerUp}
+              onPointerCancel={handleCanvasPointerUp}
+              onPointerLeave={handleCanvasPointerUp}
             />
           </div>
 
-          {gameStarted && isTouchDevice && (
+          {gameStarted && isTouchDevice && CONTROL_MODE !== 'touch' && (
             <div className={`touch-controls${playerMode === 'multi' ? '' : ' touch-controls-centered'}`}>
               <div className="touch-group">
                 <div className="touch-row">
