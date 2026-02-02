@@ -1882,22 +1882,38 @@ const SlimeSoccer = () => {
       if (keys['a']) state.leftSlime.vx = -SLIME_SPEED;
       else if (keys['d']) state.leftSlime.vx = SLIME_SPEED;
       else state.leftSlime.vx = 0;
-      
-      if (keys['w'] && state.leftSlime.y >= GAME_HEIGHT - GROUND_HEIGHT - 1 && !state.leftSlime.isGrabbing) {
-        state.leftSlime.vy = SLIME_JUMP_POWER;
+
+      if (BOARD_ALIGNMENT === 'bottom_top') {
+        // In bottom_top mode, W/S control vertical movement
+        if (keys['w']) state.leftSlime.vy = -SLIME_SPEED;
+        else if (keys['s']) state.leftSlime.vy = SLIME_SPEED;
+        else state.leftSlime.vy = 0;
+        // Use shift key for grabbing in bottom_top mode
+        state.leftSlime.isGrabbing = keys['shift'];
+      } else {
+        if (keys['w'] && state.leftSlime.y >= GAME_HEIGHT - GROUND_HEIGHT - 1 && !state.leftSlime.isGrabbing) {
+          state.leftSlime.vy = SLIME_JUMP_POWER;
+        }
+        state.leftSlime.isGrabbing = keys['s'];
       }
-      
-      state.leftSlime.isGrabbing = keys['s'];
-      
+
       if (keys['arrowleft']) state.rightSlime.vx = -SLIME_SPEED;
       else if (keys['arrowright']) state.rightSlime.vx = SLIME_SPEED;
       else state.rightSlime.vx = 0;
-      
-      if (keys['arrowup'] && state.rightSlime.y >= GAME_HEIGHT - GROUND_HEIGHT - 1 && !state.rightSlime.isGrabbing) {
-        state.rightSlime.vy = SLIME_JUMP_POWER;
+
+      if (BOARD_ALIGNMENT === 'bottom_top') {
+        // In bottom_top mode, Up/Down arrows control vertical movement
+        if (keys['arrowup']) state.rightSlime.vy = -SLIME_SPEED;
+        else if (keys['arrowdown']) state.rightSlime.vy = SLIME_SPEED;
+        else state.rightSlime.vy = 0;
+        // Use space key for grabbing in bottom_top mode
+        state.rightSlime.isGrabbing = keys[' '];
+      } else {
+        if (keys['arrowup'] && state.rightSlime.y >= GAME_HEIGHT - GROUND_HEIGHT - 1 && !state.rightSlime.isGrabbing) {
+          state.rightSlime.vy = SLIME_JUMP_POWER;
+        }
+        state.rightSlime.isGrabbing = keys['arrowdown'];
       }
-      
-      state.rightSlime.isGrabbing = keys['arrowdown'];
 
       const noInput = !(
         keys['a'] ||
@@ -1931,13 +1947,21 @@ const SlimeSoccer = () => {
       if (keys['arrowleft']) state.rightSlime.vx = -SLIME_SPEED;
       else if (keys['arrowright']) state.rightSlime.vx = SLIME_SPEED;
       else state.rightSlime.vx = 0;
-      
-      if (keys['arrowup'] && state.rightSlime.y >= GAME_HEIGHT - GROUND_HEIGHT - 1 && !state.rightSlime.isGrabbing) {
-        state.rightSlime.vy = SLIME_JUMP_POWER;
+
+      if (BOARD_ALIGNMENT === 'bottom_top') {
+        // In bottom_top mode, Up/Down arrows control vertical movement
+        if (keys['arrowup']) state.rightSlime.vy = -SLIME_SPEED;
+        else if (keys['arrowdown']) state.rightSlime.vy = SLIME_SPEED;
+        else state.rightSlime.vy = 0;
+        // Use space key for grabbing in bottom_top mode
+        state.rightSlime.isGrabbing = keys[' '];
+      } else {
+        if (keys['arrowup'] && state.rightSlime.y >= GAME_HEIGHT - GROUND_HEIGHT - 1 && !state.rightSlime.isGrabbing) {
+          state.rightSlime.vy = SLIME_JUMP_POWER;
+        }
+        state.rightSlime.isGrabbing = keys['arrowdown'];
       }
-      
-      state.rightSlime.isGrabbing = keys['arrowdown'];
-      
+
       updateAI();
     }
 
