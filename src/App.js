@@ -1984,14 +1984,19 @@ const SlimeSoccer = () => {
         slime.vx *= 0.9;
         slime.vy *= 0.9;
 
-        // Boundary checking - players can move freely across entire field
+        // Boundary checking - players stay in their own half (top/bottom)
         const isBottomPlayer = index === 1; // rightSlime is bottom player (user-controlled)
+        const midLine = GAME_HEIGHT / 2;
+        const minY = isBottomPlayer ? midLine + SLIME_RADIUS : GROUND_HEIGHT + SLIME_RADIUS;
+        const maxY = isBottomPlayer
+          ? GAME_HEIGHT - GROUND_HEIGHT - SLIME_RADIUS
+          : midLine - SLIME_RADIUS;
+
         if (slime.x < SLIME_RADIUS) slime.x = SLIME_RADIUS;
         if (slime.x > GAME_WIDTH - SLIME_RADIUS) slime.x = GAME_WIDTH - SLIME_RADIUS;
 
-        // Both players can move across the entire field (top to bottom)
-        if (slime.y < GROUND_HEIGHT + SLIME_RADIUS) slime.y = GROUND_HEIGHT + SLIME_RADIUS;
-        if (slime.y > GAME_HEIGHT - GROUND_HEIGHT - SLIME_RADIUS) slime.y = GAME_HEIGHT - GROUND_HEIGHT - SLIME_RADIUS;
+        if (slime.y < minY) slime.y = minY;
+        if (slime.y > maxY) slime.y = maxY;
 
         // Goal line time for camping prevention
         const goalStart = (GAME_WIDTH - GOAL_WIDTH) / 2;
@@ -3258,18 +3263,22 @@ const SlimeSoccer = () => {
     const coords = getCanvasCoords(event);
     if (!coords) return;
 
-    // Add touch indicator
-    addTouchIndicator(coords.x, coords.y, isHost ? 'left' : 'right', true);
-
     // Determine which player this controls based on position and mode
     let playerSide;
     if (playerMode === 'single' || playerMode === 'remote') {
       playerSide = isHost ? 'left' : 'right';
       if (playerMode === 'single') playerSide = 'right';
     } else {
-      // Multi mode: left half controls left player, right half controls right
-      playerSide = coords.x < GAME_WIDTH / 2 ? 'left' : 'right';
+      // Multi mode: split control based on board alignment
+      if (BOARD_ALIGNMENT === 'bottom_top') {
+        playerSide = coords.y < GAME_HEIGHT / 2 ? 'left' : 'right';
+      } else {
+        playerSide = coords.x < GAME_WIDTH / 2 ? 'left' : 'right';
+      }
     }
+
+    // Add touch indicator
+    addTouchIndicator(coords.x, coords.y, playerSide, true);
 
     touchTargetRef.current[playerSide] = coords;
     touchActiveRef.current[playerSide] = true;
@@ -3281,7 +3290,7 @@ const SlimeSoccer = () => {
     if (playerMode === 'remote' && remoteConnected && DISPLAY_TOUCH_MODE === 'both') {
       sendData({ type: 'touch', x: coords.x / GAME_WIDTH, y: coords.y / GAME_HEIGHT });
     }
-  }, [gameStarted, getCanvasCoords, addTouchIndicator, isHost, playerMode, handleTouchMove, remoteConnected, GAME_WIDTH, GAME_HEIGHT]);
+  }, [gameStarted, getCanvasCoords, addTouchIndicator, isHost, playerMode, handleTouchMove, remoteConnected, GAME_WIDTH, GAME_HEIGHT, BOARD_ALIGNMENT]);
 
   const handleCanvasPointerMove = useCallback((event) => {
     if (CONTROL_MODE === 'keys') return;
@@ -3290,24 +3299,29 @@ const SlimeSoccer = () => {
     const coords = getCanvasCoords(event);
     if (!coords) return;
 
-    // Update touch indicator position
-    if (touchIndicatorsRef.current.length > 0) {
-      const lastIndicator = touchIndicatorsRef.current[touchIndicatorsRef.current.length - 1];
-      if (lastIndicator.isLocal && Date.now() - lastIndicator.createdAt < 100) {
-        lastIndicator.x = coords.x;
-        lastIndicator.y = coords.y;
-      } else {
-        addTouchIndicator(coords.x, coords.y, isHost ? 'left' : 'right', true);
-      }
-    }
-
     // Determine which player and update movement
     let playerSide;
     if (playerMode === 'single' || playerMode === 'remote') {
       playerSide = isHost ? 'left' : 'right';
       if (playerMode === 'single') playerSide = 'right';
     } else {
-      playerSide = coords.x < GAME_WIDTH / 2 ? 'left' : 'right';
+      if (BOARD_ALIGNMENT === 'bottom_top') {
+        playerSide = coords.y < GAME_HEIGHT / 2 ? 'left' : 'right';
+      } else {
+        playerSide = coords.x < GAME_WIDTH / 2 ? 'left' : 'right';
+      }
+    }
+
+    // Update touch indicator position
+    if (touchIndicatorsRef.current.length > 0) {
+      const lastIndicator = touchIndicatorsRef.current[touchIndicatorsRef.current.length - 1];
+      if (lastIndicator.isLocal && Date.now() - lastIndicator.createdAt < 100) {
+        lastIndicator.x = coords.x;
+        lastIndicator.y = coords.y;
+        lastIndicator.playerId = playerSide;
+      } else {
+        addTouchIndicator(coords.x, coords.y, playerSide, true);
+      }
     }
 
     if (touchActiveRef.current[playerSide]) {
@@ -3318,7 +3332,7 @@ const SlimeSoccer = () => {
         sendData({ type: 'touch', x: coords.x / GAME_WIDTH, y: coords.y / GAME_HEIGHT });
       }
     }
-  }, [gameStarted, getCanvasCoords, addTouchIndicator, isHost, playerMode, handleTouchMove, remoteConnected, GAME_WIDTH, GAME_HEIGHT]);
+  }, [gameStarted, getCanvasCoords, addTouchIndicator, isHost, playerMode, handleTouchMove, remoteConnected, GAME_WIDTH, GAME_HEIGHT, BOARD_ALIGNMENT]);
 
   const handleCanvasPointerUp = useCallback((event) => {
     if (CONTROL_MODE === 'keys') return;
@@ -3331,7 +3345,11 @@ const SlimeSoccer = () => {
       playerSide = isHost ? 'left' : 'right';
       if (playerMode === 'single') playerSide = 'right';
     } else if (coords) {
-      playerSide = coords.x < GAME_WIDTH / 2 ? 'left' : 'right';
+      if (BOARD_ALIGNMENT === 'bottom_top') {
+        playerSide = coords.y < GAME_HEIGHT / 2 ? 'left' : 'right';
+      } else {
+        playerSide = coords.x < GAME_WIDTH / 2 ? 'left' : 'right';
+      }
     } else {
       // If no coords, deactivate both
       ['left', 'right'].forEach(side => {
@@ -3357,7 +3375,7 @@ const SlimeSoccer = () => {
         : ['arrowleft', 'arrowright', 'arrowup', 'arrowdown'];
       keys.forEach(k => simulateKey(k, false));
     }
-  }, [getCanvasCoords, isHost, playerMode, simulateKey, GAME_WIDTH]);
+  }, [getCanvasCoords, isHost, playerMode, simulateKey, GAME_WIDTH, GAME_HEIGHT, BOARD_ALIGNMENT]);
 
   const TouchButton = ({ label, actionKey }) => {
     const isBlinking = blinkingKeys[actionKey];
