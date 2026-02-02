@@ -3449,7 +3449,7 @@ const SlimeSoccer = () => {
         </div>
       )}
 
-      {selectionStep === 'mode' && (
+      {selectionStep === 'mode' && !gameStarted && !winner && (
         <div className="text-center relative w-full z-10">
           <div className="fixed top-0 left-0 right-0 flex justify-center z-10">
             <img
@@ -3487,7 +3487,7 @@ const SlimeSoccer = () => {
         </div>
       )}
 
-      {selectionStep === 'remoteSetup' && (
+      {selectionStep === 'remoteSetup' && !gameStarted && !winner && (
        <div className="text-center relative z-10">
           <h2 className="text-3xl font-bold mb-6 text-green-400">
             {t('remoteMultiplayer')}
@@ -3611,7 +3611,7 @@ const SlimeSoccer = () => {
         </div>
       )}
 
-      {selectionStep === 'shape' && (
+      {selectionStep === 'shape' && !gameStarted && !winner && (
         <div className="text-center relative z-10">
           <h2 className="text-3xl font-bold mb-6 text-green-400">{t('selectShape')}</h2>
 
@@ -3741,7 +3741,7 @@ const SlimeSoccer = () => {
         </div>
       )}
       
-      {selectionStep === 'ball' && (
+      {selectionStep === 'ball' && !gameStarted && !winner && (
         <div className="text-center relative z-10">
           <h2 className="text-3xl font-bold mb-6 text-green-400">{t('selectBall')}</h2>
           
