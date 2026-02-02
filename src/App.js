@@ -1469,7 +1469,11 @@ const SlimeSoccer = () => {
       grabbedBy: null,
       grabAngle: 0,
       grabAngularVelocity: 0,
-      haltedUntil: 0
+      haltedUntil: 0,
+      stillSince: null,
+      lastMoveX: GAME_WIDTH / 2,
+      lastMoveY: BOARD_ALIGNMENT === 'bottom_top' ? GAME_HEIGHT / 2 : 150,
+      ignoreNextCollision: false
     }
   });
 
@@ -1598,6 +1602,10 @@ const SlimeSoccer = () => {
     // For bottom_top mode: ball stays in center until hit (haltedUntil = Infinity means halted forever until hit)
     // For right_left mode: 2 second delay before ball starts falling
     state.ball.haltedUntil = BOARD_ALIGNMENT === 'bottom_top' ? Infinity : Date.now() + 2000;
+    state.ball.stillSince = null;
+    state.ball.lastMoveX = state.ball.x;
+    state.ball.lastMoveY = state.ball.y;
+    state.ball.ignoreNextCollision = false;
   };
 
   const resetGame = () => {
@@ -1648,6 +1656,51 @@ const SlimeSoccer = () => {
     const ai = state.leftSlime;
     const opponent = state.rightSlime;
     const ball = state.ball;
+    if (BOARD_ALIGNMENT === 'bottom_top') {
+      const targetGoalX = GAME_WIDTH / 2;
+      const targetGoalY = GAME_HEIGHT - GROUND_HEIGHT - SLIME_RADIUS * 1.2;
+      const toBallX = ball.x - ai.x;
+      const toBallY = ball.y - ai.y;
+      const distanceToBall = Math.hypot(toBallX, toBallY);
+      const moveSpeed = SLIME_SPEED * 0.9;
+
+      let targetX = ball.x;
+      let targetY = ball.y;
+      let shouldGrab = false;
+      let releaseBall = false;
+
+      if (ai.hasBall) {
+        targetX = targetGoalX;
+        targetY = targetGoalY;
+        if (ai.y > GAME_HEIGHT - GROUND_HEIGHT * 2.2) {
+          releaseBall = true;
+        }
+      } else if (!ball.grabbedBy && distanceToBall < SLIME_RADIUS + BALL_RADIUS + 10) {
+        shouldGrab = true;
+      }
+
+      const dx = targetX - ai.x;
+      const dy = targetY - ai.y;
+
+      if (Math.abs(dx) > 5) {
+        ai.vx = Math.sign(dx) * moveSpeed;
+      } else {
+        ai.vx = 0;
+      }
+
+      if (Math.abs(dy) > 5) {
+        ai.vy = Math.sign(dy) * moveSpeed;
+      } else {
+        ai.vy = 0;
+      }
+
+      if (ai.hasBall && releaseBall) {
+        ai.isGrabbing = false;
+      } else {
+        ai.isGrabbing = shouldGrab;
+      }
+      return;
+    }
     const currentTime = Date.now();
     const { leftX } = computeStartPositions(GAME_WIDTH);
     
@@ -1857,6 +1910,8 @@ const SlimeSoccer = () => {
     
   }, [
     BALL_RADIUS,
+    BOARD_ALIGNMENT,
+    GROUND_HEIGHT,
     GAME_HEIGHT,
     GAME_WIDTH,
     GOAL_WIDTH,
@@ -2157,6 +2212,35 @@ const SlimeSoccer = () => {
           state.ball.vy = -state.ball.vy * BALL_BOUNCE_DAMPING;
         }
       }
+
+      if (!ballIsHalted && !state.ball.grabbedBy) {
+        const moveDx = state.ball.x - state.ball.lastMoveX;
+        const moveDy = state.ball.y - state.ball.lastMoveY;
+        const moveDistance = Math.hypot(moveDx, moveDy);
+        const speed = Math.hypot(state.ball.vx, state.ball.vy);
+        const isStationary = moveDistance < 0.5 && speed < 0.2;
+
+        if (isStationary) {
+          if (!state.ball.stillSince) {
+            state.ball.stillSince = now;
+          } else if (now - state.ball.stillSince > 4000) {
+            const targetX = GAME_WIDTH / 2;
+            const targetY = GAME_HEIGHT / 2;
+            const angleToCenter = Math.atan2(targetY - state.ball.y, targetX - state.ball.x);
+            const kickSpeed = 6;
+            state.ball.vx = Math.cos(angleToCenter) * kickSpeed;
+            state.ball.vy = Math.sin(angleToCenter) * kickSpeed;
+            state.ball.ignoreNextCollision = true;
+            state.ball.stillSince = null;
+            state.ball.lastMoveX = state.ball.x;
+            state.ball.lastMoveY = state.ball.y;
+          }
+        } else {
+          state.ball.stillSince = null;
+          state.ball.lastMoveX = state.ball.x;
+          state.ball.lastMoveY = state.ball.y;
+        }
+      }
     } else {
       // Original right_left mode
       if (state.ball.x < BALL_RADIUS) {
@@ -2210,6 +2294,10 @@ const SlimeSoccer = () => {
         const distance = Math.sqrt(dx * dx + dy * dy);
 
         if (distance < SLIME_RADIUS + BALL_RADIUS) {
+          if (state.ball.ignoreNextCollision) {
+            state.ball.ignoreNextCollision = false;
+            return;
+          }
           // In bottom_top mode, unhalt the ball when hit
           if (BOARD_ALIGNMENT === 'bottom_top' && state.ball.haltedUntil === Infinity) {
             state.ball.haltedUntil = 0;
@@ -3148,6 +3236,7 @@ const SlimeSoccer = () => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
   const lightButtonClasses = 'bg-green-200 hover:bg-green-300 text-green-900 border-2 border-green-300 ellipse-button';
+  const showSelectionScreens = !gameStarted && !winner;
 
   const setKeyState = useCallback((key, pressed) => {
     keysRef.current[key] = pressed;
@@ -3428,7 +3517,7 @@ const SlimeSoccer = () => {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen w-screen bg-green-700 text-gray-900 p-4" dir="rtl">
       {/* History images overlay - shown on all selection screens */}
-      {!gameStarted && !winner && displayHistoryImages && historyOverlay.src && (
+      {showSelectionScreens && displayHistoryImages && historyOverlay.src && (
         <div className="fixed inset-0 pointer-events-none z-0">
           <img
             src={historyOverlay.src}
@@ -3449,7 +3538,7 @@ const SlimeSoccer = () => {
         </div>
       )}
 
-      {selectionStep === 'mode' && (
+      {showSelectionScreens && selectionStep === 'mode' && (
         <div className="text-center relative w-full z-10">
           <div className="fixed top-0 left-0 right-0 flex justify-center z-10">
             <img
@@ -3487,7 +3576,7 @@ const SlimeSoccer = () => {
         </div>
       )}
 
-      {selectionStep === 'remoteSetup' && (
+      {showSelectionScreens && selectionStep === 'remoteSetup' && (
        <div className="text-center relative z-10">
           <h2 className="text-3xl font-bold mb-6 text-green-400">
             {t('remoteMultiplayer')}
@@ -3611,7 +3700,7 @@ const SlimeSoccer = () => {
         </div>
       )}
 
-      {selectionStep === 'shape' && (
+      {showSelectionScreens && selectionStep === 'shape' && (
         <div className="text-center relative z-10">
           <h2 className="text-3xl font-bold mb-6 text-green-400">{t('selectShape')}</h2>
 
@@ -3741,7 +3830,7 @@ const SlimeSoccer = () => {
         </div>
       )}
       
-      {selectionStep === 'ball' && (
+      {showSelectionScreens && selectionStep === 'ball' && (
         <div className="text-center relative z-10">
           <h2 className="text-3xl font-bold mb-6 text-green-400">{t('selectBall')}</h2>
           
@@ -3789,7 +3878,7 @@ const SlimeSoccer = () => {
         </div>
       )}
       
-      {selectionStep === 'duration' && !gameStarted && !winner && (
+      {showSelectionScreens && selectionStep === 'duration' && (
          <div className="text-center relative z-10">
           <h2 className="text-2xl font-bold mb-4">{t('selectDuration')}</h2>
           
