@@ -1136,13 +1136,24 @@ const SlimeSoccer = () => {
         });
       } else {
         // Guest sends left player (WASD) input
-        sendData({
-          type: 'input',
-          left: keys['a'] || false,
-          right: keys['d'] || false,
-          up: keys['w'] || false,
-          down: keys['s'] || false,
-        });
+        // In bottom_top mode, guest's view is flipped 180°, so invert input directions
+        if (BOARD_ALIGNMENT === 'bottom_top') {
+          sendData({
+            type: 'input',
+            left: keys['d'] || false,   // D on flipped view = left in game coords
+            right: keys['a'] || false,  // A on flipped view = right in game coords
+            up: keys['s'] || false,     // S on flipped view = up in game coords
+            down: keys['w'] || false,   // W on flipped view = down in game coords
+          });
+        } else {
+          sendData({
+            type: 'input',
+            left: keys['a'] || false,
+            right: keys['d'] || false,
+            up: keys['w'] || false,
+            down: keys['s'] || false,
+          });
+        }
       }
     }, 1000 / 60); // 60 times per second
 
@@ -1989,13 +2000,17 @@ const SlimeSoccer = () => {
         slime.vx *= 0.9;
         slime.vy *= 0.9;
 
-        // Boundary checking - players stay in their own half (top/bottom)
+        // Boundary checking - players can move full field up to opponent's goalpost
         const isBottomPlayer = index === 1; // rightSlime is bottom player (user-controlled)
-        const midLine = GAME_HEIGHT / 2;
-        const minY = isBottomPlayer ? midLine + SLIME_RADIUS : GROUND_HEIGHT + SLIME_RADIUS;
+        // In remote mode, allow full field movement (up to opponent's goal area)
+        // In other modes, keep midline restriction
+        const useFullField = playerMode === 'remote';
+        const minY = isBottomPlayer
+          ? (useFullField ? GROUND_HEIGHT + SLIME_RADIUS : GAME_HEIGHT / 2 + SLIME_RADIUS)
+          : GROUND_HEIGHT + SLIME_RADIUS;
         const maxY = isBottomPlayer
           ? GAME_HEIGHT - GROUND_HEIGHT - SLIME_RADIUS
-          : midLine - SLIME_RADIUS;
+          : (useFullField ? GAME_HEIGHT - GROUND_HEIGHT - SLIME_RADIUS : GAME_HEIGHT / 2 - SLIME_RADIUS);
 
         if (slime.x < SLIME_RADIUS) slime.x = SLIME_RADIUS;
         if (slime.x > GAME_WIDTH - SLIME_RADIUS) slime.x = GAME_WIDTH - SLIME_RADIUS;
@@ -2574,6 +2589,14 @@ const SlimeSoccer = () => {
     const ctx = canvas.getContext('2d');
     const state = gameStateRef.current;
 
+    // Flip the view for remote guest so their character appears at bottom
+    const shouldFlipView = playerMode === 'remote' && !isHost && BOARD_ALIGNMENT === 'bottom_top';
+    if (shouldFlipView) {
+      ctx.save();
+      ctx.translate(GAME_WIDTH, GAME_HEIGHT);
+      ctx.rotate(Math.PI);
+    }
+
     if (BOARD_ALIGNMENT === 'bottom_top') {
       // Soccer field style background with stripes
       const stripeWidth = GAME_WIDTH / 10;
@@ -3035,6 +3058,11 @@ const SlimeSoccer = () => {
         ctx.restore();
       });
     }
+
+    // Restore canvas state if we flipped the view for guest
+    if (playerMode === 'remote' && !isHost && BOARD_ALIGNMENT === 'bottom_top') {
+      ctx.restore();
+    }
   }, [
     GAME_HEIGHT,
     GAME_WIDTH,
@@ -3046,7 +3074,8 @@ const SlimeSoccer = () => {
     selectedShapes,
     selectedBall,
     playerMode,
-    goalpostLogoOpacity
+    goalpostLogoOpacity,
+    isHost
   ]);
 
   const gameLoop = useCallback((currentTime) => {
@@ -3184,11 +3213,17 @@ const SlimeSoccer = () => {
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-    return {
-      x: (event.clientX - rect.left) * scaleX,
-      y: (event.clientY - rect.top) * scaleY
-    };
-  }, []);
+    let x = (event.clientX - rect.left) * scaleX;
+    let y = (event.clientY - rect.top) * scaleY;
+
+    // Flip coordinates for remote guest since their view is rotated 180 degrees
+    if (playerMode === 'remote' && !isHost && BOARD_ALIGNMENT === 'bottom_top') {
+      x = GAME_WIDTH - x;
+      y = GAME_HEIGHT - y;
+    }
+
+    return { x, y };
+  }, [playerMode, isHost, GAME_WIDTH, GAME_HEIGHT]);
 
   // Handle touch-to-move for a specific player
   const handleTouchMove = useCallback((playerSide, targetX, targetY) => {
