@@ -1989,9 +1989,13 @@ const SlimeSoccer = () => {
         slime.vx *= 0.9;
         slime.vy *= 0.9;
 
-        // Boundary checking - players can move across the full field between goalposts
-        const minY = GROUND_HEIGHT + SLIME_RADIUS;
-        const maxY = GAME_HEIGHT - GROUND_HEIGHT - SLIME_RADIUS;
+        // Boundary checking - players stay in their own half (top/bottom)
+        const isBottomPlayer = index === 1; // rightSlime is bottom player (user-controlled)
+        const midLine = GAME_HEIGHT / 2;
+        const minY = isBottomPlayer ? midLine + SLIME_RADIUS : GROUND_HEIGHT + SLIME_RADIUS;
+        const maxY = isBottomPlayer
+          ? GAME_HEIGHT - GROUND_HEIGHT - SLIME_RADIUS
+          : midLine - SLIME_RADIUS;
 
         if (slime.x < SLIME_RADIUS) slime.x = SLIME_RADIUS;
         if (slime.x > GAME_WIDTH - SLIME_RADIUS) slime.x = GAME_WIDTH - SLIME_RADIUS;
