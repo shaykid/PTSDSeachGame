@@ -102,6 +102,10 @@ const DISPLAY_TOUCH_MODE = (() => {
   const val = (process.env.REACT_APP_DISPLAY_TOUCH ?? process.env.DISPLAY_TOUCH ?? 'personal').toLowerCase();
   return ['none', 'personal', 'both'].includes(val) ? val : 'personal';
 })();
+const BOARD_ALIGNMENT = (() => {
+  const val = (process.env.REACT_APP_BOARD_ALIGNMENT ?? process.env.BOARD_ALIGNMENT ?? 'bottom_top').toLowerCase();
+  return ['right_left', 'bottom_top'].includes(val) ? val : 'bottom_top';
+})();
 const TOUCH_MOVE_MIN_KEYS = 2;
 const HISTORY_IMAGE_FILES = [
   '0bb921c5-b38c-4aa1-bed0-678ab0d8fa08.jpeg',
@@ -359,6 +363,10 @@ const SlimeSoccer = () => {
   const touchIndicatorsRef = useRef([]); // Array of touch indicators for fingerprint display
   const fingerprintImageRef = useRef(null); // Fingerprint image for touch display
 
+  // Goalpost logo visibility state (for bottom_top alignment)
+  const [goalpostLogoOpacity, setGoalpostLogoOpacity] = useState(0);
+  const gameStartTimeRef = useRef(null);
+
   // Remote multiplayer state
   const [roomId, setRoomId] = useState(null);
   const [isHost, setIsHost] = useState(false);
@@ -418,13 +426,28 @@ const SlimeSoccer = () => {
     : defaultGoalSize;
   const SLIME_RADIUS = playerSize / 1.3; // 2;
   const BALL_RADIUS = ballSize / 2;
-  const GOAL_WIDTH = goalWidth;
-  const GOAL_HEIGHT = goalHeight * 1.8;
+  // For bottom_top alignment: goalpost is 50% of screen width, centered at top/bottom
+  // For right_left alignment: goalpost is on left/right sides (original behavior)
+  const GOAL_WIDTH = BOARD_ALIGNMENT === 'bottom_top' ? GAME_WIDTH * 0.5 : goalWidth;
+  const GOAL_HEIGHT = BOARD_ALIGNMENT === 'bottom_top' ? GROUND_HEIGHT * 1.2 : goalHeight * 1.8;
   const computeStartPositions = useCallback(
-    (fieldWidth) => {
-      const leftX = Math.max(SLIME_RADIUS + 10, GOAL_WIDTH * 0.6);
-      const rightX = Math.min(fieldWidth - SLIME_RADIUS - 10, fieldWidth - GOAL_WIDTH * 0.6);
-      return { leftX, rightX };
+    (fieldWidth, fieldHeight) => {
+      if (BOARD_ALIGNMENT === 'bottom_top') {
+        // Player 1 (bottom) near bottom goalpost, Player 2 (top) near top goalpost
+        const bottomY = fieldHeight - GROUND_HEIGHT;
+        const topY = GROUND_HEIGHT + SLIME_RADIUS;
+        return {
+          leftX: fieldWidth / 2, // Player 1 (bottom) centered
+          rightX: fieldWidth / 2, // Player 2 (top) centered
+          leftY: bottomY,
+          rightY: topY
+        };
+      } else {
+        // Original right_left positioning
+        const leftX = Math.max(SLIME_RADIUS + 10, GOAL_WIDTH * 0.6);
+        const rightX = Math.min(fieldWidth - SLIME_RADIUS - 10, fieldWidth - GOAL_WIDTH * 0.6);
+        return { leftX, rightX };
+      }
     },
     [SLIME_RADIUS, GOAL_WIDTH]
   );
@@ -1410,11 +1433,13 @@ const SlimeSoccer = () => {
   };
   
   // Game objects state
-  const initialPositions = computeStartPositions(GAME_WIDTH);
+  const initialPositions = computeStartPositions(GAME_WIDTH, GAME_HEIGHT);
   const gameStateRef = useRef({
     leftSlime: {
       x: initialPositions.leftX,
-      y: GAME_HEIGHT - GROUND_HEIGHT,
+      y: BOARD_ALIGNMENT === 'bottom_top'
+        ? (initialPositions.leftY ?? GAME_HEIGHT - GROUND_HEIGHT)
+        : GAME_HEIGHT - GROUND_HEIGHT,
       vx: 0,
       vy: 0,
       isGrabbing: false,
@@ -1427,7 +1452,9 @@ const SlimeSoccer = () => {
     },
     rightSlime: {
       x: initialPositions.rightX,
-      y: GAME_HEIGHT - GROUND_HEIGHT,
+      y: BOARD_ALIGNMENT === 'bottom_top'
+        ? (initialPositions.rightY ?? GAME_HEIGHT - GROUND_HEIGHT)
+        : GAME_HEIGHT - GROUND_HEIGHT,
       vx: 0,
       vy: 0,
       isGrabbing: false,
@@ -1436,7 +1463,7 @@ const SlimeSoccer = () => {
     },
     ball: {
       x: GAME_WIDTH / 2,
-      y: 150,
+      y: BOARD_ALIGNMENT === 'bottom_top' ? GAME_HEIGHT / 2 : 150, // Center for bottom_top
       vx: 0,
       vy: 0,
       grabbedBy: null,
@@ -1536,35 +1563,41 @@ const SlimeSoccer = () => {
 
   const resetPositions = () => {
     const state = gameStateRef.current;
-    const { leftX, rightX } = computeStartPositions(GAME_WIDTH);
-    state.leftSlime.x = leftX;
-    state.leftSlime.y = GAME_HEIGHT - GROUND_HEIGHT;
+    const positions = computeStartPositions(GAME_WIDTH, GAME_HEIGHT);
+    state.leftSlime.x = positions.leftX;
+    state.leftSlime.y = BOARD_ALIGNMENT === 'bottom_top'
+      ? (positions.leftY ?? GAME_HEIGHT - GROUND_HEIGHT)
+      : GAME_HEIGHT - GROUND_HEIGHT;
     state.leftSlime.vx = 0;
     state.leftSlime.vy = 0;
     state.leftSlime.isGrabbing = false;
     state.leftSlime.hasBall = false;
     state.leftSlime.goalLineTime = 0;
-    state.leftSlime.targetX = leftX;
+    state.leftSlime.targetX = positions.leftX;
     state.leftSlime.lastDecisionTime = 0;
     state.leftSlime.decisionCooldown = 0;
     state.leftSlime.stableStart = true;
-    
-    state.rightSlime.x = rightX;
-    state.rightSlime.y = GAME_HEIGHT - GROUND_HEIGHT;
+
+    state.rightSlime.x = positions.rightX;
+    state.rightSlime.y = BOARD_ALIGNMENT === 'bottom_top'
+      ? (positions.rightY ?? GAME_HEIGHT - GROUND_HEIGHT)
+      : GAME_HEIGHT - GROUND_HEIGHT;
     state.rightSlime.vx = 0;
     state.rightSlime.vy = 0;
     state.rightSlime.isGrabbing = false;
     state.rightSlime.hasBall = false;
     state.rightSlime.goalLineTime = 0;
-    
+
     state.ball.x = GAME_WIDTH / 2;
-    state.ball.y = 150;
+    state.ball.y = BOARD_ALIGNMENT === 'bottom_top' ? GAME_HEIGHT / 2 : 150;
     state.ball.vx = 0;
     state.ball.vy = 0;
     state.ball.grabbedBy = null;
     state.ball.grabAngle = 0;
     state.ball.grabAngularVelocity = 0;
-    state.ball.haltedUntil = Date.now() + 2000; // 2 second delay before ball starts
+    // For bottom_top mode: ball stays in center until hit (haltedUntil = Infinity means halted forever until hit)
+    // For right_left mode: 2 second delay before ball starts falling
+    state.ball.haltedUntil = BOARD_ALIGNMENT === 'bottom_top' ? Infinity : Date.now() + 2000;
   };
 
   const resetGame = () => {
@@ -1590,8 +1623,10 @@ const SlimeSoccer = () => {
     setGameMode(mode);
     setTimeLeft(times[mode]);
     setGameStarted(false);
+    setGoalpostLogoOpacity(0); // Reset logo opacity
     startGameTimeoutRef.current = setTimeout(() => {
       setGameStarted(true);
+      gameStartTimeRef.current = Date.now(); // Track game start time for logo fade
       // Notify remote peer about game start
       if (playerMode === 'remote' && remoteConnected && isHost) {
         sendData({
@@ -1917,25 +1952,62 @@ const SlimeSoccer = () => {
     }
     
     [state.leftSlime, state.rightSlime].forEach((slime, index) => {
-      slime.vy += GRAVITY;
-      slime.x += slime.vx;
-      slime.y += slime.vy;
-      
-      if (slime.x < SLIME_RADIUS) slime.x = SLIME_RADIUS;
-      if (slime.x > GAME_WIDTH - SLIME_RADIUS) slime.x = GAME_WIDTH - SLIME_RADIUS;
-      
-      if (slime.y > GAME_HEIGHT - GROUND_HEIGHT) {
-        slime.y = GAME_HEIGHT - GROUND_HEIGHT;
-        slime.vy = 0;
-      }
-      
-      const isLeftSlime = index === 0;
-      const inOwnGoalArea = (isLeftSlime && slime.x < GOAL_WIDTH) || (!isLeftSlime && slime.x > GAME_WIDTH - GOAL_WIDTH);
-      
-      if (inOwnGoalArea) {
-        slime.goalLineTime = Math.min(slime.goalLineTime + 1/60, 1);
+      if (BOARD_ALIGNMENT === 'bottom_top') {
+        // In bottom_top mode, players move horizontally and have no gravity
+        slime.x += slime.vx;
+        slime.y += slime.vy;
+        // Apply friction
+        slime.vx *= 0.9;
+        slime.vy *= 0.9;
+
+        // Boundary checking - players stay in their half
+        const isBottomPlayer = index === 0; // leftSlime is bottom player in bottom_top
+        if (slime.x < SLIME_RADIUS) slime.x = SLIME_RADIUS;
+        if (slime.x > GAME_WIDTH - SLIME_RADIUS) slime.x = GAME_WIDTH - SLIME_RADIUS;
+
+        if (isBottomPlayer) {
+          // Bottom player stays in bottom half
+          if (slime.y < GAME_HEIGHT / 2 + SLIME_RADIUS) slime.y = GAME_HEIGHT / 2 + SLIME_RADIUS;
+          if (slime.y > GAME_HEIGHT - GROUND_HEIGHT - SLIME_RADIUS) slime.y = GAME_HEIGHT - GROUND_HEIGHT - SLIME_RADIUS;
+        } else {
+          // Top player stays in top half
+          if (slime.y < GROUND_HEIGHT + SLIME_RADIUS) slime.y = GROUND_HEIGHT + SLIME_RADIUS;
+          if (slime.y > GAME_HEIGHT / 2 - SLIME_RADIUS) slime.y = GAME_HEIGHT / 2 - SLIME_RADIUS;
+        }
+
+        // Goal line time for camping prevention
+        const goalStart = (GAME_WIDTH - GOAL_WIDTH) / 2;
+        const goalEnd = goalStart + GOAL_WIDTH;
+        const inOwnGoalArea = (isBottomPlayer && slime.y > GAME_HEIGHT - GROUND_HEIGHT * 2 && slime.x > goalStart && slime.x < goalEnd) ||
+                              (!isBottomPlayer && slime.y < GROUND_HEIGHT * 2 && slime.x > goalStart && slime.x < goalEnd);
+
+        if (inOwnGoalArea) {
+          slime.goalLineTime = Math.min(slime.goalLineTime + 1/60, 1);
+        } else {
+          slime.goalLineTime = 0;
+        }
       } else {
-        slime.goalLineTime = 0;
+        // Original right_left mode physics
+        slime.vy += GRAVITY;
+        slime.x += slime.vx;
+        slime.y += slime.vy;
+
+        if (slime.x < SLIME_RADIUS) slime.x = SLIME_RADIUS;
+        if (slime.x > GAME_WIDTH - SLIME_RADIUS) slime.x = GAME_WIDTH - SLIME_RADIUS;
+
+        if (slime.y > GAME_HEIGHT - GROUND_HEIGHT) {
+          slime.y = GAME_HEIGHT - GROUND_HEIGHT;
+          slime.vy = 0;
+        }
+
+        const isLeftSlime = index === 0;
+        const inOwnGoalArea = (isLeftSlime && slime.x < GOAL_WIDTH) || (!isLeftSlime && slime.x > GAME_WIDTH - GOAL_WIDTH);
+
+        if (inOwnGoalArea) {
+          slime.goalLineTime = Math.min(slime.goalLineTime + 1/60, 1);
+        } else {
+          slime.goalLineTime = 0;
+        }
       }
     });
     
@@ -1996,60 +2068,122 @@ const SlimeSoccer = () => {
           grabber.hasBall = false;
         }
       } else {
-        state.ball.vy += BALL_GRAVITY;
-        state.ball.vx *= BALL_DAMPING;
-        state.ball.x += state.ball.vx;
-        state.ball.y += state.ball.vy;
+        if (BOARD_ALIGNMENT === 'bottom_top') {
+          // No gravity in bottom_top mode, ball moves only when hit
+          // Apply friction/damping
+          state.ball.vx *= BALL_DAMPING;
+          state.ball.vy *= BALL_DAMPING;
+          state.ball.x += state.ball.vx;
+          state.ball.y += state.ball.vy;
+        } else {
+          // Original right_left mode with gravity
+          state.ball.vy += BALL_GRAVITY;
+          state.ball.vx *= BALL_DAMPING;
+          state.ball.x += state.ball.vx;
+          state.ball.y += state.ball.vy;
 
-        // Random horizontal shift while falling (±10-40 pixels, ~3% chance per frame)
-        if (state.ball.vy > 0 && Math.random() < 0.03) {
-          const shiftAmount = (10 + Math.random() * 30) * (Math.random() < 0.5 ? -1 : 1);
-          state.ball.x += shiftAmount;
+          // Random horizontal shift while falling (±10-40 pixels, ~3% chance per frame)
+          if (state.ball.vy > 0 && Math.random() < 0.03) {
+            const shiftAmount = (10 + Math.random() * 30) * (Math.random() < 0.5 ? -1 : 1);
+            state.ball.x += shiftAmount;
+          }
         }
       }
     }
     
-    if (state.ball.x < BALL_RADIUS) {
-      state.ball.x = BALL_RADIUS;
-      state.ball.vx = -state.ball.vx * BALL_BOUNCE_DAMPING;
-    }
-    if (state.ball.x > GAME_WIDTH - BALL_RADIUS) {
-      state.ball.x = GAME_WIDTH - BALL_RADIUS;
-      state.ball.vx = -state.ball.vx * BALL_BOUNCE_DAMPING;
-    }
-    
-    if (state.ball.y > GAME_HEIGHT - GROUND_HEIGHT - BALL_RADIUS) {
-      state.ball.y = GAME_HEIGHT - GROUND_HEIGHT - BALL_RADIUS;
-      state.ball.vy = -state.ball.vy * BALL_BOUNCE_DAMPING;
-    }
-    
-    if (state.ball.x <= BALL_RADIUS && state.ball.y > GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT) {
-      playGoalSound();
-      triggerGoalCelebration();
-      // Send goal celebration to guest player
-      if (playerMode === 'remote' && remoteConnected && isHost) {
-        sendData({ type: 'goalCelebration' });
+    if (BOARD_ALIGNMENT === 'bottom_top') {
+      // Bottom_top mode: walls on left/right, goals on top/bottom (centered, 50% width)
+      const goalStart = (GAME_WIDTH - GOAL_WIDTH) / 2;
+      const goalEnd = goalStart + GOAL_WIDTH;
+
+      // Left/right wall bouncing
+      if (state.ball.x < BALL_RADIUS) {
+        state.ball.x = BALL_RADIUS;
+        state.ball.vx = -state.ball.vx * BALL_BOUNCE_DAMPING;
       }
-      setScore(prev => ({ ...prev, right: prev.right + 1 }));
-      resetPositions();
-    } else if (state.ball.x >= GAME_WIDTH - BALL_RADIUS && state.ball.y > GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT) {
-      playGoalSound();
-      triggerGoalCelebration();
-      // Send goal celebration to guest player
-      if (playerMode === 'remote' && remoteConnected && isHost) {
-        sendData({ type: 'goalCelebration' });
+      if (state.ball.x > GAME_WIDTH - BALL_RADIUS) {
+        state.ball.x = GAME_WIDTH - BALL_RADIUS;
+        state.ball.vx = -state.ball.vx * BALL_BOUNCE_DAMPING;
       }
-      setScore(prev => ({ ...prev, left: prev.left + 1 }));
-      resetPositions();
+
+      // Bottom boundary - bounce unless in goal area
+      if (state.ball.y > GAME_HEIGHT - GROUND_HEIGHT - BALL_RADIUS) {
+        if (state.ball.x > goalStart && state.ball.x < goalEnd) {
+          // Goal scored! Player 2 (top) scores in bottom goal
+          playGoalSound();
+          triggerGoalCelebration();
+          if (playerMode === 'remote' && remoteConnected && isHost) {
+            sendData({ type: 'goalCelebration' });
+          }
+          setScore(prev => ({ ...prev, right: prev.right + 1 }));
+          resetPositions();
+        } else {
+          state.ball.y = GAME_HEIGHT - GROUND_HEIGHT - BALL_RADIUS;
+          state.ball.vy = -state.ball.vy * BALL_BOUNCE_DAMPING;
+        }
+      }
+
+      // Top boundary - bounce unless in goal area
+      if (state.ball.y < GROUND_HEIGHT + BALL_RADIUS) {
+        if (state.ball.x > goalStart && state.ball.x < goalEnd) {
+          // Goal scored! Player 1 (bottom) scores in top goal
+          playGoalSound();
+          triggerGoalCelebration();
+          if (playerMode === 'remote' && remoteConnected && isHost) {
+            sendData({ type: 'goalCelebration' });
+          }
+          setScore(prev => ({ ...prev, left: prev.left + 1 }));
+          resetPositions();
+        } else {
+          state.ball.y = GROUND_HEIGHT + BALL_RADIUS;
+          state.ball.vy = -state.ball.vy * BALL_BOUNCE_DAMPING;
+        }
+      }
+    } else {
+      // Original right_left mode
+      if (state.ball.x < BALL_RADIUS) {
+        state.ball.x = BALL_RADIUS;
+        state.ball.vx = -state.ball.vx * BALL_BOUNCE_DAMPING;
+      }
+      if (state.ball.x > GAME_WIDTH - BALL_RADIUS) {
+        state.ball.x = GAME_WIDTH - BALL_RADIUS;
+        state.ball.vx = -state.ball.vx * BALL_BOUNCE_DAMPING;
+      }
+
+      if (state.ball.y > GAME_HEIGHT - GROUND_HEIGHT - BALL_RADIUS) {
+        state.ball.y = GAME_HEIGHT - GROUND_HEIGHT - BALL_RADIUS;
+        state.ball.vy = -state.ball.vy * BALL_BOUNCE_DAMPING;
+      }
+
+      if (state.ball.x <= BALL_RADIUS && state.ball.y > GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT) {
+        playGoalSound();
+        triggerGoalCelebration();
+        if (playerMode === 'remote' && remoteConnected && isHost) {
+          sendData({ type: 'goalCelebration' });
+        }
+        setScore(prev => ({ ...prev, right: prev.right + 1 }));
+        resetPositions();
+      } else if (state.ball.x >= GAME_WIDTH - BALL_RADIUS && state.ball.y > GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT) {
+        playGoalSound();
+        triggerGoalCelebration();
+        if (playerMode === 'remote' && remoteConnected && isHost) {
+          sendData({ type: 'goalCelebration' });
+        }
+        setScore(prev => ({ ...prev, left: prev.left + 1 }));
+        resetPositions();
+      }
+
+      if (state.ball.y < BALL_RADIUS) {
+        state.ball.y = BALL_RADIUS;
+        state.ball.vy = -state.ball.vy * BALL_BOUNCE_DAMPING;
+      }
     }
     
-    if (state.ball.y < BALL_RADIUS) {
-      state.ball.y = BALL_RADIUS;
-      state.ball.vy = -state.ball.vy * BALL_BOUNCE_DAMPING;
-    }
-    
-    // Only allow ball-slime collision when ball is not halted
-    if (!ballIsHalted) {
+    // Ball-slime collision
+    // In bottom_top mode, always check for collisions (ball starts halted and moves when hit)
+    // In right_left mode, only check when ball is not halted
+    const checkCollisions = BOARD_ALIGNMENT === 'bottom_top' || !ballIsHalted;
+    if (checkCollisions) {
       [state.leftSlime, state.rightSlime].forEach((slime, index) => {
         const slimeName = index === 0 ? 'left' : 'right';
         const otherSlime = index === 0 ? state.rightSlime : state.leftSlime;
@@ -2058,11 +2192,16 @@ const SlimeSoccer = () => {
         const distance = Math.sqrt(dx * dx + dy * dy);
 
         if (distance < SLIME_RADIUS + BALL_RADIUS) {
+          // In bottom_top mode, unhalt the ball when hit
+          if (BOARD_ALIGNMENT === 'bottom_top' && state.ball.haltedUntil === Infinity) {
+            state.ball.haltedUntil = 0;
+          }
+
           if (state.ball.grabbedBy && state.ball.grabbedBy !== slimeName) {
             const angle = Math.atan2(dy, dx);
             const speed = Math.sqrt(slime.vx * slime.vx + slime.vy * slime.vy);
 
-            if (speed > 2 || Math.abs(slime.vy) > 5) {
+            if (speed > 2 || Math.abs(slime.vy) > 5 || (BOARD_ALIGNMENT === 'bottom_top' && speed > 1)) {
               state.ball.grabbedBy = null;
               state.ball.grabAngle = 0;
               state.ball.grabAngularVelocity = 0;
@@ -2083,16 +2222,21 @@ const SlimeSoccer = () => {
             const targetX = slime.x + Math.cos(angle) * (SLIME_RADIUS + BALL_RADIUS);
             const targetY = slime.y + Math.sin(angle) * (SLIME_RADIUS + BALL_RADIUS);
 
-            if (state.ball.y < slime.y || Math.abs(angle) < Math.PI * 0.5) {
+            // In bottom_top mode, always allow collision from any direction
+            const allowCollision = BOARD_ALIGNMENT === 'bottom_top' ||
+              (state.ball.y < slime.y || Math.abs(angle) < Math.PI * 0.5);
+
+            if (allowCollision) {
               state.ball.x = targetX;
               state.ball.y = targetY;
 
               const speed = Math.sqrt(state.ball.vx * state.ball.vx + state.ball.vy * state.ball.vy);
+              const hitPower = BOARD_ALIGNMENT === 'bottom_top' ? 2.0 : 1.5; // Stronger hit in bottom_top
               state.ball.vx = (
-                Math.cos(angle) * speed * 1.5 + slime.vx * 0.5
+                Math.cos(angle) * Math.max(speed, 3) * hitPower + slime.vx * 0.5
               ) * BALL_SPEED_MULTIPLIER;
               state.ball.vy = (
-                Math.sin(angle) * speed * 1.5 + slime.vy * 0.5
+                Math.sin(angle) * Math.max(speed, 3) * hitPower + slime.vy * 0.5
               ) * BALL_SPEED_MULTIPLIER;
 
               const newSpeed = Math.sqrt(state.ball.vx * state.ball.vx + state.ball.vy * state.ball.vy);
@@ -2398,137 +2542,329 @@ const SlimeSoccer = () => {
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    
+
     const ctx = canvas.getContext('2d');
     const state = gameStateRef.current;
-    
-    // Draw background
-    if (backgroundImageRef.current) {
-      ctx.drawImage(backgroundImageRef.current, 0, 0);
-    } else {
-      ctx.fillStyle = '#0d3d1f';
-      ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-    }
-    
-    // Draw Seach logo in background (positioned below header)
-    let logoMetrics = null;
-    if (logoImageRef.current) {
-      ctx.globalAlpha = 0.7;
-      const originalWidth = logoImageRef.current.width;
-      const originalHeight = logoImageRef.current.height;
-      const targetWidth = GAME_WIDTH * 1.0;
-      const targetHeight = GAME_HEIGHT * 1.0;
-      const scale = Math.min(
-        targetWidth / originalWidth,
-        targetHeight / originalHeight
-      );
-      const logoWidth = originalWidth * scale;
-      const logoHeight = originalHeight * scale;
-      // Offset to position below header (header is approx 60px in screen space)
-      const headerOffset = GAME_HEIGHT * 0.08;
-      ctx.drawImage(
-        logoImageRef.current,
-        GAME_WIDTH / 2 - logoWidth / 2,
-        headerOffset,
-        logoWidth,
-        logoHeight
-      );
-      ctx.globalAlpha = 1.0;
-      logoMetrics = { headerOffset, logoHeight };
-    }
 
-    const instructionLines = [];
-    if (instructionVisibility.line1) {
-      instructionLines.push(t('gameInstruction1'));
-    }
-    if (instructionVisibility.line2) {
-      // Use touch instruction when CONTROL_MODE is 'touch'
-      instructionLines.push(t(CONTROL_MODE === 'touch' ? 'gameInstruction2Touch' : 'gameInstruction2'));
-    }
+    if (BOARD_ALIGNMENT === 'bottom_top') {
+      // Soccer field style background with stripes
+      const stripeWidth = GAME_WIDTH / 10;
+      for (let i = 0; i < 10; i++) {
+        ctx.fillStyle = i % 2 === 0 ? '#2d8a4e' : '#34a058';
+        ctx.fillRect(i * stripeWidth, 0, stripeWidth, GAME_HEIGHT);
+      }
 
-    if (instructionLines.length > 0) {
-      const fontSize = Math.round(GAME_HEIGHT * 0.03);
-      const lineSpacing = fontSize * 1.4;
-      const baseOffset = logoMetrics
-        ? logoMetrics.headerOffset + logoMetrics.logoHeight
-        : GAME_HEIGHT * 0.15;
+      // Draw goal areas (top and bottom)
+      ctx.fillStyle = '#1a5f36';
+      ctx.fillRect(0, 0, GAME_WIDTH, GROUND_HEIGHT); // Top goal area
+      ctx.fillRect(0, GAME_HEIGHT - GROUND_HEIGHT, GAME_WIDTH, GROUND_HEIGHT); // Bottom goal area
 
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.font = `bold ${fontSize}px Arial`;
+      // Draw soccer field lines
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.lineWidth = 3;
+
+      // Field boundary
+      const fieldTop = GROUND_HEIGHT;
+      const fieldBottom = GAME_HEIGHT - GROUND_HEIGHT;
+      const fieldHeight = fieldBottom - fieldTop;
+
+      ctx.strokeRect(5, fieldTop, GAME_WIDTH - 10, fieldHeight);
+
+      // Center line (horizontal)
+      ctx.beginPath();
+      ctx.moveTo(0, GAME_HEIGHT / 2);
+      ctx.lineTo(GAME_WIDTH, GAME_HEIGHT / 2);
+      ctx.stroke();
+
+      // Center circle
+      const centerRadius = Math.min(GAME_WIDTH, GAME_HEIGHT) * 0.12;
+      ctx.beginPath();
+      ctx.arc(GAME_WIDTH / 2, GAME_HEIGHT / 2, centerRadius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Center spot
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.beginPath();
+      ctx.arc(GAME_WIDTH / 2, GAME_HEIGHT / 2, 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Goal areas (centered, 50% width)
+      const goalStart = (GAME_WIDTH - GOAL_WIDTH) / 2;
+      const goalAreaDepth = GAME_HEIGHT * 0.08;
+      const penaltyAreaDepth = GAME_HEIGHT * 0.15;
+      const penaltyAreaWidth = GOAL_WIDTH * 1.4;
+      const penaltyStart = (GAME_WIDTH - penaltyAreaWidth) / 2;
+
+      // Top penalty area
+      ctx.strokeRect(penaltyStart, fieldTop, penaltyAreaWidth, penaltyAreaDepth);
+      // Top goal area (smaller box)
+      ctx.strokeRect(goalStart, fieldTop, GOAL_WIDTH, goalAreaDepth);
+
+      // Bottom penalty area
+      ctx.strokeRect(penaltyStart, fieldBottom - penaltyAreaDepth, penaltyAreaWidth, penaltyAreaDepth);
+      // Bottom goal area (smaller box)
+      ctx.strokeRect(goalStart, fieldBottom - goalAreaDepth, GOAL_WIDTH, goalAreaDepth);
+
+      // Penalty arcs (semi-circles outside penalty areas)
+      const penaltyArcRadius = GAME_HEIGHT * 0.06;
+      // Top arc
+      ctx.beginPath();
+      ctx.arc(GAME_WIDTH / 2, fieldTop + penaltyAreaDepth, penaltyArcRadius, 0, Math.PI);
+      ctx.stroke();
+      // Bottom arc
+      ctx.beginPath();
+      ctx.arc(GAME_WIDTH / 2, fieldBottom - penaltyAreaDepth, penaltyArcRadius, Math.PI, Math.PI * 2);
+      ctx.stroke();
+
+      // Corner arcs
+      const cornerRadius = 15;
+      ctx.beginPath();
+      ctx.arc(0, fieldTop, cornerRadius, 0, Math.PI / 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(GAME_WIDTH, fieldTop, cornerRadius, Math.PI / 2, Math.PI);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, fieldBottom, cornerRadius, -Math.PI / 2, 0);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(GAME_WIDTH, fieldBottom, cornerRadius, Math.PI, Math.PI * 1.5);
+      ctx.stroke();
+
+      // Draw goalposts at top and bottom (centered)
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 4;
+
+      // Top goalpost
+      ctx.beginPath();
+      ctx.moveTo(goalStart, 0);
+      ctx.lineTo(goalStart, GROUND_HEIGHT);
+      ctx.lineTo(goalStart + GOAL_WIDTH, GROUND_HEIGHT);
+      ctx.lineTo(goalStart + GOAL_WIDTH, 0);
+      ctx.stroke();
+
+      // Top goal net
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      for (let i = goalStart; i <= goalStart + GOAL_WIDTH; i += 12) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i, GROUND_HEIGHT);
+        ctx.stroke();
+      }
+      for (let j = 0; j <= GROUND_HEIGHT; j += 12) {
+        ctx.beginPath();
+        ctx.moveTo(goalStart, j);
+        ctx.lineTo(goalStart + GOAL_WIDTH, j);
+        ctx.stroke();
+      }
+
+      // Bottom goalpost
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(goalStart, GAME_HEIGHT);
+      ctx.lineTo(goalStart, GAME_HEIGHT - GROUND_HEIGHT);
+      ctx.lineTo(goalStart + GOAL_WIDTH, GAME_HEIGHT - GROUND_HEIGHT);
+      ctx.lineTo(goalStart + GOAL_WIDTH, GAME_HEIGHT);
+      ctx.stroke();
+
+      // Bottom goal net
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      for (let i = goalStart; i <= goalStart + GOAL_WIDTH; i += 12) {
+        ctx.beginPath();
+        ctx.moveTo(i, GAME_HEIGHT - GROUND_HEIGHT);
+        ctx.lineTo(i, GAME_HEIGHT);
+        ctx.stroke();
+      }
+      for (let j = GAME_HEIGHT - GROUND_HEIGHT; j <= GAME_HEIGHT; j += 12) {
+        ctx.beginPath();
+        ctx.moveTo(goalStart, j);
+        ctx.lineTo(goalStart + GOAL_WIDTH, j);
+        ctx.stroke();
+      }
+
+      // Draw logo on goalposts with fade effect
+      if (logoImageRef.current && goalpostLogoOpacity > 0) {
+        ctx.globalAlpha = goalpostLogoOpacity * 0.5; // Half transparent
+        const logoSize = Math.min(GOAL_WIDTH * 0.6, GROUND_HEIGHT * 0.8);
+        const logoX = GAME_WIDTH / 2 - logoSize / 2;
+
+        // Top goalpost logo
+        ctx.drawImage(logoImageRef.current, logoX, (GROUND_HEIGHT - logoSize) / 2, logoSize, logoSize);
+        // Bottom goalpost logo
+        ctx.drawImage(logoImageRef.current, logoX, GAME_HEIGHT - GROUND_HEIGHT + (GROUND_HEIGHT - logoSize) / 2, logoSize, logoSize);
+
+        ctx.globalAlpha = 1.0;
+      }
+
+      // Draw game instructions rotated 90 degrees to the left (vertical, in middle of screen)
+      const instructionLines = [];
+      if (instructionVisibility.line1) {
+        instructionLines.push(t('gameInstruction1'));
+      }
+      if (instructionVisibility.line2) {
+        instructionLines.push(t(CONTROL_MODE === 'touch' ? 'gameInstruction2Touch' : 'gameInstruction2'));
+      }
+
+      if (instructionLines.length > 0) {
+        const fontSize = Math.round(GAME_HEIGHT * 0.025);
+        ctx.save();
+        ctx.translate(GAME_WIDTH * 0.08, GAME_HEIGHT / 2);
+        ctx.rotate(-Math.PI / 2); // Rotate 90 degrees counter-clockwise (to the left)
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.font = `bold ${fontSize}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const lineSpacing = fontSize * 1.5;
+        instructionLines.forEach((line, index) => {
+          ctx.fillText(line, 0, (index - (instructionLines.length - 1) / 2) * lineSpacing);
+        });
+        ctx.restore();
+      }
+
+      // Draw scores near goals
+      ctx.font = 'bold 32px Arial';
       ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      instructionLines.forEach((line, index) => {
-        ctx.fillText(line, GAME_WIDTH / 2, baseOffset + fontSize * 0.5 + index * lineSpacing);
-      });
-    }
-    
-    // Draw ground
-    ctx.fillStyle = '#1a4d2e';
-    ctx.fillRect(0, GAME_HEIGHT - GROUND_HEIGHT, GAME_WIDTH, GROUND_HEIGHT);
-    
-    // Ground pattern
-    ctx.strokeStyle = '#2d5a3d';
-    ctx.lineWidth = 1;
-    for (let i = 0; i < GAME_WIDTH; i += 20) {
+      ctx.textBaseline = 'middle';
+
+      // Score for bottom player (Player 1/left) - shows near top goal (opponent's goal)
+      ctx.fillStyle = score.left > score.right ? '#00ff00' : (score.left < score.right ? '#888888' : '#ffffff');
+      ctx.fillText(String(score.left), GAME_WIDTH / 2, GROUND_HEIGHT + 30);
+
+      // Score for top player (Player 2/right) - shows near bottom goal (opponent's goal)
+      ctx.fillStyle = score.right > score.left ? '#00ff00' : (score.right < score.left ? '#888888' : '#ffffff');
+      ctx.fillText(String(score.right), GAME_WIDTH / 2, GAME_HEIGHT - GROUND_HEIGHT - 30);
+
+    } else {
+      // Original right_left mode drawing
+      // Draw background
+      if (backgroundImageRef.current) {
+        ctx.drawImage(backgroundImageRef.current, 0, 0);
+      } else {
+        ctx.fillStyle = '#0d3d1f';
+        ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+      }
+
+      // Draw Seach logo in background (positioned below header)
+      let logoMetrics = null;
+      if (logoImageRef.current) {
+        ctx.globalAlpha = 0.7;
+        const originalWidth = logoImageRef.current.width;
+        const originalHeight = logoImageRef.current.height;
+        const targetWidth = GAME_WIDTH * 1.0;
+        const targetHeight = GAME_HEIGHT * 1.0;
+        const scale = Math.min(
+          targetWidth / originalWidth,
+          targetHeight / originalHeight
+        );
+        const logoWidth = originalWidth * scale;
+        const logoHeight = originalHeight * scale;
+        const headerOffset = GAME_HEIGHT * 0.08;
+        ctx.drawImage(
+          logoImageRef.current,
+          GAME_WIDTH / 2 - logoWidth / 2,
+          headerOffset,
+          logoWidth,
+          logoHeight
+        );
+        ctx.globalAlpha = 1.0;
+        logoMetrics = { headerOffset, logoHeight };
+      }
+
+      const instructionLines = [];
+      if (instructionVisibility.line1) {
+        instructionLines.push(t('gameInstruction1'));
+      }
+      if (instructionVisibility.line2) {
+        instructionLines.push(t(CONTROL_MODE === 'touch' ? 'gameInstruction2Touch' : 'gameInstruction2'));
+      }
+
+      if (instructionLines.length > 0) {
+        const fontSize = Math.round(GAME_HEIGHT * 0.03);
+        const lineSpacing = fontSize * 1.4;
+        const baseOffset = logoMetrics
+          ? logoMetrics.headerOffset + logoMetrics.logoHeight
+          : GAME_HEIGHT * 0.15;
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.font = `bold ${fontSize}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        instructionLines.forEach((line, index) => {
+          ctx.fillText(line, GAME_WIDTH / 2, baseOffset + fontSize * 0.5 + index * lineSpacing);
+        });
+      }
+
+      // Draw ground
+      ctx.fillStyle = '#1a4d2e';
+      ctx.fillRect(0, GAME_HEIGHT - GROUND_HEIGHT, GAME_WIDTH, GROUND_HEIGHT);
+
+      // Ground pattern
+      ctx.strokeStyle = '#2d5a3d';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < GAME_WIDTH; i += 20) {
+        ctx.beginPath();
+        ctx.moveTo(i, GAME_HEIGHT - GROUND_HEIGHT);
+        ctx.lineTo(i, GAME_HEIGHT);
+        ctx.stroke();
+      }
+
+      // Draw goals
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 3;
+
+      // Left goal
       ctx.beginPath();
-      ctx.moveTo(i, GAME_HEIGHT - GROUND_HEIGHT);
-      ctx.lineTo(i, GAME_HEIGHT);
+      ctx.moveTo(0, GAME_HEIGHT - GROUND_HEIGHT);
+      ctx.lineTo(GOAL_WIDTH, GAME_HEIGHT - GROUND_HEIGHT);
+      ctx.moveTo(GOAL_WIDTH / 2, GAME_HEIGHT - GROUND_HEIGHT);
+      ctx.lineTo(GOAL_WIDTH / 2, GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT);
       ctx.stroke();
-    }
-    
-    // Draw goals
-    ctx.strokeStyle = '#FFFFFF';
-    ctx.lineWidth = 3;
-    
-    // Left goal
-    ctx.beginPath();
-    ctx.moveTo(0, GAME_HEIGHT - GROUND_HEIGHT);
-    ctx.lineTo(GOAL_WIDTH, GAME_HEIGHT - GROUND_HEIGHT);
-    ctx.moveTo(GOAL_WIDTH / 2, GAME_HEIGHT - GROUND_HEIGHT);
-    ctx.lineTo(GOAL_WIDTH / 2, GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT);
-    ctx.stroke();
-    
-    // Left goal net
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-    for (let i = 0; i < GOAL_WIDTH / 2; i += 10) {
+
+      // Left goal net
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+      for (let i = 0; i < GOAL_WIDTH / 2; i += 10) {
+        ctx.beginPath();
+        ctx.moveTo(i, GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT);
+        ctx.lineTo(i, GAME_HEIGHT - GROUND_HEIGHT);
+        ctx.stroke();
+      }
+      for (let j = GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT; j <= GAME_HEIGHT - GROUND_HEIGHT; j += 10) {
+        ctx.beginPath();
+        ctx.moveTo(0, j);
+        ctx.lineTo(GOAL_WIDTH / 2, j);
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 3;
+
+      // Right goal
       ctx.beginPath();
-      ctx.moveTo(i, GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT);
-      ctx.lineTo(i, GAME_HEIGHT - GROUND_HEIGHT);
+      ctx.moveTo(GAME_WIDTH - GOAL_WIDTH, GAME_HEIGHT - GROUND_HEIGHT);
+      ctx.lineTo(GAME_WIDTH, GAME_HEIGHT - GROUND_HEIGHT);
+      ctx.moveTo(GAME_WIDTH - GOAL_WIDTH / 2, GAME_HEIGHT - GROUND_HEIGHT);
+      ctx.lineTo(GAME_WIDTH - GOAL_WIDTH / 2, GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT);
       ctx.stroke();
-    }
-    for (let j = GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT; j <= GAME_HEIGHT - GROUND_HEIGHT; j += 10) {
-      ctx.beginPath();
-      ctx.moveTo(0, j);
-      ctx.lineTo(GOAL_WIDTH / 2, j);
-      ctx.stroke();
-    }
-    
-    ctx.strokeStyle = '#FFFFFF';
-    ctx.lineWidth = 3;
-    
-    // Right goal
-    ctx.beginPath();
-    ctx.moveTo(GAME_WIDTH - GOAL_WIDTH, GAME_HEIGHT - GROUND_HEIGHT);
-    ctx.lineTo(GAME_WIDTH, GAME_HEIGHT - GROUND_HEIGHT);
-    ctx.moveTo(GAME_WIDTH - GOAL_WIDTH / 2, GAME_HEIGHT - GROUND_HEIGHT);
-    ctx.lineTo(GAME_WIDTH - GOAL_WIDTH / 2, GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT);
-    ctx.stroke();
-    
-    // Right goal net
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-    for (let i = GAME_WIDTH - GOAL_WIDTH / 2; i <= GAME_WIDTH; i += 10) {
-      ctx.beginPath();
-      ctx.moveTo(i, GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT);
-      ctx.lineTo(i, GAME_HEIGHT - GROUND_HEIGHT);
-      ctx.stroke();
-    }
-    for (let j = GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT; j <= GAME_HEIGHT - GROUND_HEIGHT; j += 10) {
-      ctx.beginPath();
-      ctx.moveTo(GAME_WIDTH - GOAL_WIDTH / 2, j);
-      ctx.lineTo(GAME_WIDTH, j);
-      ctx.stroke();
+
+      // Right goal net
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+      for (let i = GAME_WIDTH - GOAL_WIDTH / 2; i <= GAME_WIDTH; i += 10) {
+        ctx.beginPath();
+        ctx.moveTo(i, GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT);
+        ctx.lineTo(i, GAME_HEIGHT - GROUND_HEIGHT);
+        ctx.stroke();
+      }
+      for (let j = GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT; j <= GAME_HEIGHT - GROUND_HEIGHT; j += 10) {
+        ctx.beginPath();
+        ctx.moveTo(GAME_WIDTH - GOAL_WIDTH / 2, j);
+        ctx.lineTo(GAME_WIDTH, j);
+        ctx.stroke();
+      }
     }
 
     const getScoreColor = (currentScore, opponentScore) => {
@@ -2539,6 +2875,7 @@ const SlimeSoccer = () => {
     };
 
     const drawScoreAboveGoal = (goalCenterX, currentScore, opponentScore) => {
+      if (BOARD_ALIGNMENT === 'bottom_top') return; // Scores drawn differently in bottom_top mode
       const scoreY = GAME_HEIGHT - GROUND_HEIGHT - GOAL_HEIGHT - 24;
       ctx.font = 'bold 28px Arial';
       ctx.textAlign = 'center';
@@ -2679,7 +3016,8 @@ const SlimeSoccer = () => {
     score,
     selectedShapes,
     selectedBall,
-    playerMode
+    playerMode,
+    goalpostLogoOpacity
   ]);
 
   const gameLoop = useCallback((currentTime) => {
@@ -2725,6 +3063,63 @@ const SlimeSoccer = () => {
     return () => {
       clearTimeout(hideFirst);
       clearTimeout(hideSecond);
+    };
+  }, [gameStarted]);
+
+  // Logo fade effect for bottom_top mode (appears 20s after start, fades after 10s, reappears after 20s)
+  useEffect(() => {
+    if (!gameStarted || BOARD_ALIGNMENT !== 'bottom_top') {
+      setGoalpostLogoOpacity(0);
+      return;
+    }
+
+    // Timing constants
+    const FIRST_APPEAR_DELAY = 20000; // 20 seconds before first appearance
+    const VISIBLE_DURATION = 10000;   // 10 seconds visible
+    const HIDDEN_DURATION = 20000;    // 20 seconds hidden before reappearing
+    const FADE_DURATION = 1000;       // 1 second fade in/out
+
+    let fadeInterval = null;
+    let cycleTimeout = null;
+    let isMounted = true;
+
+    const fadeIn = () => {
+      let opacity = 0;
+      fadeInterval = setInterval(() => {
+        if (!isMounted) return;
+        opacity += 0.05;
+        if (opacity >= 1) {
+          opacity = 1;
+          clearInterval(fadeInterval);
+          // Schedule fade out
+          cycleTimeout = setTimeout(fadeOut, VISIBLE_DURATION - FADE_DURATION);
+        }
+        setGoalpostLogoOpacity(opacity);
+      }, FADE_DURATION / 20);
+    };
+
+    const fadeOut = () => {
+      let opacity = 1;
+      fadeInterval = setInterval(() => {
+        if (!isMounted) return;
+        opacity -= 0.05;
+        if (opacity <= 0) {
+          opacity = 0;
+          clearInterval(fadeInterval);
+          // Schedule fade in again
+          cycleTimeout = setTimeout(fadeIn, HIDDEN_DURATION);
+        }
+        setGoalpostLogoOpacity(opacity);
+      }, FADE_DURATION / 20);
+    };
+
+    // Start the first fade in after delay
+    cycleTimeout = setTimeout(fadeIn, FIRST_APPEAR_DELAY);
+
+    return () => {
+      isMounted = false;
+      if (fadeInterval) clearInterval(fadeInterval);
+      if (cycleTimeout) clearTimeout(cycleTimeout);
     };
   }, [gameStarted]);
 
