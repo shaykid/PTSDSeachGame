@@ -3206,10 +3206,27 @@ const SlimeSoccer = () => {
       simulateKey(keys.right, false);
     }
 
-    // Jump if target is significantly above player (and player is on ground)
-    if (dy < -50 && player.y >= GAME_HEIGHT - GROUND_HEIGHT - 1) {
-      simulateKey(keys.up, true);
-      setTimeout(() => simulateKey(keys.up, false), 100);
+    // Vertical movement
+    if (BOARD_ALIGNMENT === 'bottom_top') {
+      // In bottom_top mode, allow continuous vertical movement like horizontal
+      if (Math.abs(dy) > threshold) {
+        if (dy < 0) {
+          simulateKey(keys.down, false);
+          simulateKey(keys.up, true);
+        } else {
+          simulateKey(keys.up, false);
+          simulateKey(keys.down, true);
+        }
+      } else {
+        simulateKey(keys.up, false);
+        simulateKey(keys.down, false);
+      }
+    } else {
+      // Jump if target is significantly above player (and player is on ground)
+      if (dy < -50 && player.y >= GAME_HEIGHT - GROUND_HEIGHT - 1) {
+        simulateKey(keys.up, true);
+        setTimeout(() => simulateKey(keys.up, false), 100);
+      }
     }
 
     // Update key count
