@@ -627,17 +627,17 @@ const SlimeSoccer = () => {
           isHost,
         });
         if (isHost) {
-          // Host receives guest (right player) input
-          keysRef.current['arrowleft'] = data.left;
-          keysRef.current['arrowright'] = data.right;
-          keysRef.current['arrowup'] = data.up;
-          keysRef.current['arrowdown'] = data.down;
-        } else {
-          // Guest receives host (left player) input
+          // Host receives guest (left player) input
           keysRef.current['a'] = data.left;
           keysRef.current['d'] = data.right;
           keysRef.current['w'] = data.up;
           keysRef.current['s'] = data.down;
+        } else {
+          // Guest receives host (right player) input
+          keysRef.current['arrowleft'] = data.left;
+          keysRef.current['arrowright'] = data.right;
+          keysRef.current['arrowup'] = data.up;
+          keysRef.current['arrowdown'] = data.down;
         }
       } else if (data.type === 'score') {
         setScore(data.score);
@@ -656,11 +656,11 @@ const SlimeSoccer = () => {
         // Guest receives selection step from host
         setSelectionStep(data.step);
         if (data.hostShape) {
-          setSelectedShapes((prev) => ({ ...prev, left: data.hostShape }));
+          setSelectedShapes((prev) => ({ ...prev, right: data.hostShape }));
         }
       } else if (data.type === 'guestCharacterSelect') {
         // Host receives guest's character selection
-        setSelectedShapes((prev) => ({ ...prev, right: data.shape }));
+        setSelectedShapes((prev) => ({ ...prev, left: data.shape }));
       } else if (data.type === 'hostState') {
         // Guest receives full state sync including right player position
         // Denormalize positions from 0-1 range to local screen dimensions
@@ -706,7 +706,7 @@ const SlimeSoccer = () => {
         // Show remote player's touch indicator
         const x = data.x * GAME_WIDTH;
         const y = data.y * GAME_HEIGHT;
-        const playerId = isHost ? 'right' : 'left';
+        const playerId = isHost ? 'left' : 'right';
         touchIndicatorsRef.current.push({
           x,
           y,
@@ -1126,22 +1126,22 @@ const SlimeSoccer = () => {
     const inputInterval = setInterval(() => {
       const keys = keysRef.current;
       if (isHost) {
-        // Host sends left player (WASD) input
-        sendData({
-          type: 'input',
-          left: keys['a'] || false,
-          right: keys['d'] || false,
-          up: keys['w'] || false,
-          down: keys['s'] || false,
-        });
-      } else {
-        // Guest sends right player (arrow) input
+        // Host sends right player (arrow) input
         sendData({
           type: 'input',
           left: keys['arrowleft'] || false,
           right: keys['arrowright'] || false,
           up: keys['arrowup'] || false,
           down: keys['arrowdown'] || false,
+        });
+      } else {
+        // Guest sends left player (WASD) input
+        sendData({
+          type: 'input',
+          left: keys['a'] || false,
+          right: keys['d'] || false,
+          up: keys['w'] || false,
+          down: keys['s'] || false,
         });
       }
     }, 1000 / 60); // 60 times per second
@@ -1475,10 +1475,22 @@ const SlimeSoccer = () => {
 
   // Handle keyboard input
   useEffect(() => {
+    const remoteKeySets = {
+      left: new Set(['a', 'd', 'w', 's', 'shift']),
+      right: new Set(['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ']),
+    };
+
+    const shouldHandleRemoteKey = (key) => {
+      if (playerMode !== 'remote') return true;
+      const allowedKeys = isHost ? remoteKeySets.right : remoteKeySets.left;
+      return allowedKeys.has(key);
+    };
+
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'INPUT') return;
-      e.preventDefault();
       const key = e.key.toLowerCase();
+      if (!shouldHandleRemoteKey(key)) return;
+      e.preventDefault();
       logDocumentAction('keydown', {
         key,
         code: e.code,
@@ -1489,17 +1501,14 @@ const SlimeSoccer = () => {
         shiftKey: e.shiftKey,
         metaKey: e.metaKey,
       });
-      if (key === 'arrowup' || key === 'arrowdown' || key === 'arrowleft' || key === 'arrowright') {
-        keysRef.current[key] = true;
-      } else {
-        keysRef.current[key] = true;
-      }
+      keysRef.current[key] = true;
     };
     
     const handleKeyUp = (e) => {
       if (e.target.tagName === 'INPUT') return;
-      e.preventDefault();
       const key = e.key.toLowerCase();
+      if (!shouldHandleRemoteKey(key)) return;
+      e.preventDefault();
       logDocumentAction('keyup', {
         key,
         code: e.code,
@@ -1510,11 +1519,7 @@ const SlimeSoccer = () => {
         shiftKey: e.shiftKey,
         metaKey: e.metaKey,
       });
-      if (key === 'arrowup' || key === 'arrowdown' || key === 'arrowleft' || key === 'arrowright') {
-        keysRef.current[key] = false;
-      } else {
-        keysRef.current[key] = false;
-      }
+      keysRef.current[key] = false;
     };
     
     window.addEventListener('keydown', handleKeyDown);
@@ -1524,7 +1529,7 @@ const SlimeSoccer = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [logDocumentAction]);
+  }, [isHost, logDocumentAction, playerMode]);
 
   // Timer
   useEffect(() => {
@@ -3153,6 +3158,9 @@ const SlimeSoccer = () => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
   const lightButtonClasses = 'bg-green-200 hover:bg-green-300 text-green-900 border-2 border-green-300 ellipse-button';
+  const showRightTouchControls = playerMode !== 'remote' || isHost;
+  const showLeftTouchControls = playerMode === 'multi' || (playerMode === 'remote' && !isHost);
+  const showDualTouchControls = showRightTouchControls && showLeftTouchControls;
 
   const setKeyState = useCallback((key, pressed) => {
     keysRef.current[key] = pressed;
@@ -3266,7 +3274,7 @@ const SlimeSoccer = () => {
     // Determine which player this controls based on position and mode
     let playerSide;
     if (playerMode === 'single' || playerMode === 'remote') {
-      playerSide = isHost ? 'left' : 'right';
+      playerSide = isHost ? 'right' : 'left';
       if (playerMode === 'single') playerSide = 'right';
     } else {
       // Multi mode: split control based on board alignment
@@ -3302,7 +3310,7 @@ const SlimeSoccer = () => {
     // Determine which player and update movement
     let playerSide;
     if (playerMode === 'single' || playerMode === 'remote') {
-      playerSide = isHost ? 'left' : 'right';
+      playerSide = isHost ? 'right' : 'left';
       if (playerMode === 'single') playerSide = 'right';
     } else {
       if (BOARD_ALIGNMENT === 'bottom_top') {
@@ -3342,7 +3350,7 @@ const SlimeSoccer = () => {
     // Determine which player
     let playerSide;
     if (playerMode === 'single' || playerMode === 'remote') {
-      playerSide = isHost ? 'left' : 'right';
+      playerSide = isHost ? 'right' : 'left';
       if (playerMode === 'single') playerSide = 'right';
     } else if (coords) {
       if (BOARD_ALIGNMENT === 'bottom_top') {
@@ -3644,14 +3652,14 @@ const SlimeSoccer = () => {
                     shape={shape}
                     label={t(shape)}
                     onClick={() => {
-                      setSelectedShapes((prev) => ({ ...prev, right: shape }));
+                      setSelectedShapes((prev) => ({ ...prev, left: shape }));
                       sendData({ type: 'guestCharacterSelect', shape });
                     }}
-                    selected={selectedShapes.right === shape}
+                    selected={selectedShapes.left === shape}
                   />
                 ))}
               </div>
-              {selectedShapes.right && (
+              {selectedShapes.left && (
                 <div className="flex flex-col items-center gap-4 mt-4">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-400"></div>
                   <p className="text-gray-400 text-sm whitespace-pre-line">{t('guestWaitingMessage')}</p>
@@ -3663,7 +3671,7 @@ const SlimeSoccer = () => {
           {/* Remote mode - Host selects their character and waits for guest */}
           {playerMode === 'remote' && isHost && (
             <>
-              {!selectedShapes.left && (
+              {!selectedShapes.right && (
                 <>
                   <p className="mb-4 text-gray-300">{t('chooseCharacter')}</p>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
@@ -3673,17 +3681,17 @@ const SlimeSoccer = () => {
                         shape={shape}
                         label={t(shape)}
                         onClick={() => {
-                          setSelectedShapes((prev) => ({ ...prev, left: shape }));
+                          setSelectedShapes((prev) => ({ ...prev, right: shape }));
                           // Notify guest about selection step and host's choice
                           sendData({ type: 'selectionStep', step: 'shape', hostShape: shape });
                         }}
-                        selected={selectedShapes.left === shape}
+                        selected={selectedShapes.right === shape}
                       />
                     ))}
                   </div>
                 </>
               )}
-              {selectedShapes.left && !selectedShapes.right && (
+              {selectedShapes.right && !selectedShapes.left && (
                 <div className="flex flex-col items-center gap-4">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-400"></div>
                   <p className="text-gray-400 text-sm whitespace-pre-line">{t('guestWaitingMessage')}</p>
@@ -3907,18 +3915,20 @@ const SlimeSoccer = () => {
           </div>
 
           {gameStarted && isTouchDevice && CONTROL_MODE !== 'touch' && (
-            <div className={`touch-controls${playerMode === 'multi' ? '' : ' touch-controls-centered'}`}>
-              <div className="touch-group">
-                <div className="touch-row">
-                  <TouchButton label="↑" actionKey="arrowup" />
+            <div className={`touch-controls${showDualTouchControls ? '' : ' touch-controls-centered'}`}>
+              {showRightTouchControls && (
+                <div className="touch-group">
+                  <div className="touch-row">
+                    <TouchButton label="↑" actionKey="arrowup" />
+                  </div>
+                  <div className="touch-row">
+                    <TouchButton label="→" actionKey="arrowright" />
+                    <TouchButton label="↓" actionKey="arrowdown" />
+                    <TouchButton label="←" actionKey="arrowleft" />
+                  </div>
                 </div>
-                <div className="touch-row">
-                  <TouchButton label="→" actionKey="arrowright" />
-                  <TouchButton label="↓" actionKey="arrowdown" />
-                  <TouchButton label="←" actionKey="arrowleft" />
-                </div>
-              </div>
-              {playerMode === 'multi' && (
+              )}
+              {showLeftTouchControls && (
                 <div className="touch-group">
                   <div className="touch-row">
                     <TouchButton label="W" actionKey="w" />
