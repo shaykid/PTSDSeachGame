@@ -413,7 +413,7 @@ const SlimeSoccer = () => {
   const isLandscape = GAME_WIDTH > GAME_HEIGHT;
   const fullScreenSize = Math.min(GAME_WIDTH, GAME_HEIGHT);
   const defaultPlayerSize = (SIZE_MULTIPLIER * fullScreenSize) / 7;
-  const defaultBallSize = (SIZE_MULTIPLIER * fullScreenSize) / 22;
+  const defaultBallSize = (SIZE_MULTIPLIER * fullScreenSize) / 11; // Doubled ball size
   const defaultGoalSize = (SIZE_MULTIPLIER * fullScreenSize) / 4;
   const playerSize = setSizeConfig?.userAvatarPercent
     ? (setSizeConfig.userAvatarPercent / 100) * GAME_HEIGHT
@@ -433,14 +433,14 @@ const SlimeSoccer = () => {
   const computeStartPositions = useCallback(
     (fieldWidth, fieldHeight) => {
       if (BOARD_ALIGNMENT === 'bottom_top') {
-        // Player 1 (bottom) near bottom goalpost, Player 2 (top) near top goalpost
+        // rightSlime (user-controlled) at bottom, leftSlime (AI) at top
         const bottomY = fieldHeight - GROUND_HEIGHT;
         const topY = GROUND_HEIGHT + SLIME_RADIUS;
         return {
-          leftX: fieldWidth / 2, // Player 1 (bottom) centered
-          rightX: fieldWidth / 2, // Player 2 (top) centered
-          leftY: bottomY,
-          rightY: topY
+          leftX: fieldWidth / 2, // AI player (top) centered
+          rightX: fieldWidth / 2, // User player (bottom) centered
+          leftY: topY, // AI at top
+          rightY: bottomY // User at bottom
         };
       } else {
         // Original right_left positioning
@@ -1960,20 +1960,14 @@ const SlimeSoccer = () => {
         slime.vx *= 0.9;
         slime.vy *= 0.9;
 
-        // Boundary checking - players stay in their half
-        const isBottomPlayer = index === 0; // leftSlime is bottom player in bottom_top
+        // Boundary checking - players can move freely across entire field
+        const isBottomPlayer = index === 1; // rightSlime is bottom player (user-controlled)
         if (slime.x < SLIME_RADIUS) slime.x = SLIME_RADIUS;
         if (slime.x > GAME_WIDTH - SLIME_RADIUS) slime.x = GAME_WIDTH - SLIME_RADIUS;
 
-        if (isBottomPlayer) {
-          // Bottom player stays in bottom half
-          if (slime.y < GAME_HEIGHT / 2 + SLIME_RADIUS) slime.y = GAME_HEIGHT / 2 + SLIME_RADIUS;
-          if (slime.y > GAME_HEIGHT - GROUND_HEIGHT - SLIME_RADIUS) slime.y = GAME_HEIGHT - GROUND_HEIGHT - SLIME_RADIUS;
-        } else {
-          // Top player stays in top half
-          if (slime.y < GROUND_HEIGHT + SLIME_RADIUS) slime.y = GROUND_HEIGHT + SLIME_RADIUS;
-          if (slime.y > GAME_HEIGHT / 2 - SLIME_RADIUS) slime.y = GAME_HEIGHT / 2 - SLIME_RADIUS;
-        }
+        // Both players can move across the entire field (top to bottom)
+        if (slime.y < GROUND_HEIGHT + SLIME_RADIUS) slime.y = GROUND_HEIGHT + SLIME_RADIUS;
+        if (slime.y > GAME_HEIGHT - GROUND_HEIGHT - SLIME_RADIUS) slime.y = GAME_HEIGHT - GROUND_HEIGHT - SLIME_RADIUS;
 
         // Goal line time for camping prevention
         const goalStart = (GAME_WIDTH - GOAL_WIDTH) / 2;
@@ -2106,16 +2100,16 @@ const SlimeSoccer = () => {
         state.ball.vx = -state.ball.vx * BALL_BOUNCE_DAMPING;
       }
 
-      // Bottom boundary - bounce unless in goal area
+      // Bottom boundary - bounce unless in goal area (rightSlime/user's goal)
       if (state.ball.y > GAME_HEIGHT - GROUND_HEIGHT - BALL_RADIUS) {
         if (state.ball.x > goalStart && state.ball.x < goalEnd) {
-          // Goal scored! Player 2 (top) scores in bottom goal
+          // Goal scored! leftSlime (AI at top) scores in bottom goal
           playGoalSound();
           triggerGoalCelebration();
           if (playerMode === 'remote' && remoteConnected && isHost) {
             sendData({ type: 'goalCelebration' });
           }
-          setScore(prev => ({ ...prev, right: prev.right + 1 }));
+          setScore(prev => ({ ...prev, left: prev.left + 1 }));
           resetPositions();
         } else {
           state.ball.y = GAME_HEIGHT - GROUND_HEIGHT - BALL_RADIUS;
@@ -2123,16 +2117,16 @@ const SlimeSoccer = () => {
         }
       }
 
-      // Top boundary - bounce unless in goal area
+      // Top boundary - bounce unless in goal area (leftSlime/AI's goal)
       if (state.ball.y < GROUND_HEIGHT + BALL_RADIUS) {
         if (state.ball.x > goalStart && state.ball.x < goalEnd) {
-          // Goal scored! Player 1 (bottom) scores in top goal
+          // Goal scored! rightSlime (user at bottom) scores in top goal
           playGoalSound();
           triggerGoalCelebration();
           if (playerMode === 'remote' && remoteConnected && isHost) {
             sendData({ type: 'goalCelebration' });
           }
-          setScore(prev => ({ ...prev, left: prev.left + 1 }));
+          setScore(prev => ({ ...prev, right: prev.right + 1 }));
           resetPositions();
         } else {
           state.ball.y = GROUND_HEIGHT + BALL_RADIUS;
@@ -2688,13 +2682,14 @@ const SlimeSoccer = () => {
       // Draw logo on goalposts with fade effect
       if (logoImageRef.current && goalpostLogoOpacity > 0) {
         ctx.globalAlpha = goalpostLogoOpacity * 0.5; // Half transparent
-        const logoSize = Math.min(GOAL_WIDTH * 0.6, GROUND_HEIGHT * 0.8);
-        const logoX = GAME_WIDTH / 2 - logoSize / 2;
+        const logoWidth = GOAL_WIDTH; // Logo matches goalpost width
+        const logoHeight = GROUND_HEIGHT * 0.8; // Keep height proportional to ground
+        const logoX = GAME_WIDTH / 2 - logoWidth / 2;
 
         // Top goalpost logo
-        ctx.drawImage(logoImageRef.current, logoX, (GROUND_HEIGHT - logoSize) / 2, logoSize, logoSize);
+        ctx.drawImage(logoImageRef.current, logoX, (GROUND_HEIGHT - logoHeight) / 2, logoWidth, logoHeight);
         // Bottom goalpost logo
-        ctx.drawImage(logoImageRef.current, logoX, GAME_HEIGHT - GROUND_HEIGHT + (GROUND_HEIGHT - logoSize) / 2, logoSize, logoSize);
+        ctx.drawImage(logoImageRef.current, logoX, GAME_HEIGHT - GROUND_HEIGHT + (GROUND_HEIGHT - logoHeight) / 2, logoWidth, logoHeight);
 
         ctx.globalAlpha = 1.0;
       }
@@ -2729,13 +2724,13 @@ const SlimeSoccer = () => {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
-      // Score for bottom player (Player 1/left) - shows near top goal (opponent's goal)
+      // Score for AI (leftSlime at top) - shows near bottom goal (where they score)
       ctx.fillStyle = score.left > score.right ? '#00ff00' : (score.left < score.right ? '#888888' : '#ffffff');
-      ctx.fillText(String(score.left), GAME_WIDTH / 2, GROUND_HEIGHT + 30);
+      ctx.fillText(String(score.left), GAME_WIDTH / 2, GAME_HEIGHT - GROUND_HEIGHT - 30);
 
-      // Score for top player (Player 2/right) - shows near bottom goal (opponent's goal)
+      // Score for User (rightSlime at bottom) - shows near top goal (where they score)
       ctx.fillStyle = score.right > score.left ? '#00ff00' : (score.right < score.left ? '#888888' : '#ffffff');
-      ctx.fillText(String(score.right), GAME_WIDTH / 2, GAME_HEIGHT - GROUND_HEIGHT - 30);
+      ctx.fillText(String(score.right), GAME_WIDTH / 2, GROUND_HEIGHT + 30);
 
     } else {
       // Original right_left mode drawing
