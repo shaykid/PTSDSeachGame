@@ -3236,9 +3236,18 @@ const SlimeSoccer = () => {
       : { left: 'arrowleft', right: 'arrowright', up: 'arrowup', down: 'arrowdown' };
 
     // Calculate direction to target
-    const dx = targetX - player.x;
-    const dy = targetY - player.y;
+    let dx = targetX - player.x;
+    let dy = targetY - player.y;
     const threshold = 20; // Dead zone
+
+    // For guest in remote mode with bottom_top alignment, pre-invert direction.
+    // The touch coordinates are already flipped by getCanvasCoords, but the input
+    // sender will invert the keys again (designed for keyboard). Pre-inverting here
+    // makes the two inversions cancel out, giving correct touch behavior.
+    if (playerMode === 'remote' && !isHost && BOARD_ALIGNMENT === 'bottom_top') {
+      dx = -dx;
+      dy = -dy;
+    }
 
     // Horizontal movement
     if (Math.abs(dx) > threshold) {
@@ -3279,7 +3288,7 @@ const SlimeSoccer = () => {
 
     // Update key count
     touchKeysCountRef.current[playerSide]++;
-  }, [simulateKey, GAME_HEIGHT, GROUND_HEIGHT]);
+  }, [simulateKey, GAME_HEIGHT, GROUND_HEIGHT, playerMode, isHost, BOARD_ALIGNMENT]);
 
   // Add touch indicator for fingerprint display
   const addTouchIndicator = useCallback((x, y, playerId, isLocal = true) => {
