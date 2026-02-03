@@ -596,10 +596,14 @@ const SlimeSoccer = () => {
       const data = JSON.parse(event.data);
       logDataChannelEvent('receive', data);
 
+      // Use isHostRef.current instead of isHost state to avoid stale closure issues
+      // (the data channel callback is set up before setState completes)
+      const isHostCurrent = isHostRef.current;
+
       if (data.type === 'gameState') {
         // Sync game state from host
         const state = gameStateRef.current;
-        if (!isHost) {
+        if (!isHostCurrent) {
           // Guest receives state from host
           state.leftSlime.x = data.leftSlime.x;
           state.leftSlime.y = data.leftSlime.y;
@@ -624,9 +628,9 @@ const SlimeSoccer = () => {
           right: data.right,
           up: data.up,
           down: data.down,
-          isHost,
+          isHost: isHostCurrent,
         });
-        if (isHost) {
+        if (isHostCurrent) {
           // Host receives guest (left player) input
           keysRef.current['a'] = data.left;
           keysRef.current['d'] = data.right;
@@ -706,7 +710,7 @@ const SlimeSoccer = () => {
         // Show remote player's touch indicator
         const x = data.x * GAME_WIDTH;
         const y = data.y * GAME_HEIGHT;
-        const playerId = isHost ? 'left' : 'right';
+        const playerId = isHostCurrent ? 'left' : 'right';
         touchIndicatorsRef.current.push({
           x,
           y,
@@ -719,7 +723,7 @@ const SlimeSoccer = () => {
     } catch (e) {
       console.error('Error parsing peer data:', e);
     }
-  }, [isHost, logDataChannelEvent, logDocumentAction, GAME_WIDTH, GAME_HEIGHT]);
+  }, [logDataChannelEvent, logDocumentAction, GAME_WIDTH, GAME_HEIGHT]);
 
   // Setup data channel event handlers
   const setupDataChannel = useCallback((channel) => {
