@@ -1834,6 +1834,7 @@ const SlimeSoccer = () => {
       const ballDangerZone = ball.y < GAME_HEIGHT * 0.25; // Ball very close to AI goal
       const ballSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
       const ballBetweenAIGoalAndAI = ball.y < ai.y - SLIME_RADIUS * 0.2;
+      const ballTouchingAI = aiDistToBall <= SLIME_RADIUS + BALL_RADIUS;
       const ballIdleBetweenAIGoalAndAI = ballBetweenAIGoalAndAI && ballSpeed < 0.4;
       const needsUrgentDefense = ballMovingTowardsAIGoal && ballDangerZone && ballSpeed > 2;
 
@@ -1976,6 +1977,10 @@ const SlimeSoccer = () => {
           // Opponent much closer, position to intercept their clearance
           newTargetY = Math.min(ball.y - SLIME_RADIUS * 1.5, GAME_HEIGHT * 0.45);
         }
+      }
+
+      if (ballTouchingAI && ballBetweenAIGoalAndAI) {
+        newTargetY = Math.max(newTargetY, ai.y);
       }
 
       // Boundary enforcement for AI targets
