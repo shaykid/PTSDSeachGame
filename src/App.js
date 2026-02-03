@@ -2572,12 +2572,17 @@ const SlimeSoccer = () => {
       const goalEnd = goalStart + GOAL_WIDTH;
       const isInGoalX = state.ball.x > goalStart && state.ball.x < goalEnd;
 
+      const immediateOutLeftX = BALL_RADIUS;
+      const immediateOutRightX = GAME_WIDTH - BALL_RADIUS;
+      const immediateOutTopY = GROUND_HEIGHT + BALL_RADIUS;
+      const immediateOutBottomY = GAME_HEIGHT - GROUND_HEIGHT - BALL_RADIUS;
+
       // Ball edge is above field (in top goal area) but not in goal opening
-      const isAboveField = state.ball.y - BALL_RADIUS <= GROUND_HEIGHT;
+      const isAboveField = state.ball.y <= immediateOutTopY;
       // Ball edge is below field (in bottom goal area) but not in goal opening
-      const isBelowField = state.ball.y + BALL_RADIUS >= GAME_HEIGHT - GROUND_HEIGHT;
+      const isBelowField = state.ball.y >= immediateOutBottomY;
       // Ball edge is off the sides
-      const isOffSides = state.ball.x - BALL_RADIUS <= 0 || state.ball.x + BALL_RADIUS >= GAME_WIDTH;
+      const isOffSides = state.ball.x <= immediateOutLeftX || state.ball.x >= immediateOutRightX;
 
       const isOutOfField = isOffSides || (isAboveField && !isInGoalX) || (isBelowField && !isInGoalX);
 
@@ -3617,12 +3622,16 @@ const SlimeSoccer = () => {
       ctx.fillText(`Border: ${inLeft ? 'L' : '-'}${inRight ? 'R' : '-'}${inTop ? 'T' : '-'}${inBottom ? 'B' : '-'}`, 10, GROUND_HEIGHT + 95);
 
       // Show immediate out status
-      const isAboveField = state.ball.y - BALL_RADIUS <= GROUND_HEIGHT && !isInGoalX;
-      const isBelowField = state.ball.y + BALL_RADIUS >= GAME_HEIGHT - GROUND_HEIGHT && !isInGoalX;
-      const isOffSides = state.ball.x - BALL_RADIUS <= 0 || state.ball.x + BALL_RADIUS >= GAME_WIDTH;
+      const immediateOutLeftX = BALL_RADIUS;
+      const immediateOutRightX = GAME_WIDTH - BALL_RADIUS;
+      const immediateOutTopY = GROUND_HEIGHT + BALL_RADIUS;
+      const immediateOutBottomY = GAME_HEIGHT - GROUND_HEIGHT - BALL_RADIUS;
+      const isAboveField = state.ball.y <= immediateOutTopY && !isInGoalX;
+      const isBelowField = state.ball.y >= immediateOutBottomY && !isInGoalX;
+      const isOffSides = state.ball.x <= immediateOutLeftX || state.ball.x >= immediateOutRightX;
       ctx.fillStyle = (isAboveField || isBelowField || isOffSides) ? '#f00' : '#0f0';
       ctx.fillText(
-        `Out zone: y<=${GROUND_HEIGHT} or y>=${GAME_HEIGHT - GROUND_HEIGHT} or x<=0/x>=${GAME_WIDTH}`,
+        `Out zone: y<=${Math.round(immediateOutTopY)} or y>=${Math.round(immediateOutBottomY)} or x<=${Math.round(immediateOutLeftX)}/x>=${Math.round(immediateOutRightX)}`,
         10,
         GROUND_HEIGHT + 110
       );
