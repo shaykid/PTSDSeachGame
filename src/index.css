@@ -156,3 +156,16 @@ canvas {
     transform: translateX(-100vw);
   }
 }
+
+.out-animation-text {
+  font-family: 'Solitreo', cursive;
+}
+
+@keyframes slideLeftToRight {
+  0% {
+    transform: translateX(-100vw);
+  }
+  100% {
+    transform: translateX(100vw);
+  }
+}
