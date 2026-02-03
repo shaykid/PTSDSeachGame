@@ -1484,7 +1484,12 @@ const SlimeSoccer = () => {
       grabbedBy: null,
       grabAngle: 0,
       grabAngularVelocity: 0,
-      haltedUntil: 0
+      haltedUntil: 0,
+      // Stuck ball detection - bounces to center after 4 seconds stuck
+      stuckSince: null, // timestamp when ball became stuck
+      lastStuckCheckPos: { x: 0, y: 0 },
+      bouncingToCenter: false, // true when ball is bouncing to center after being stuck
+      ignoredCharacter: null // 'left' or 'right' - the first character to ignore during bounce
     }
   });
 
@@ -1618,6 +1623,11 @@ const SlimeSoccer = () => {
     // For bottom_top mode: ball stays in center until hit (haltedUntil = Infinity means halted forever until hit)
     // For right_left mode: 2 second delay before ball starts falling
     state.ball.haltedUntil = BOARD_ALIGNMENT === 'bottom_top' ? Infinity : Date.now() + 2000;
+    // Reset stuck ball detection
+    state.ball.stuckSince = null;
+    state.ball.lastStuckCheckPos = { x: state.ball.x, y: state.ball.y };
+    state.ball.bouncingToCenter = false;
+    state.ball.ignoredCharacter = null;
   };
 
   const resetGame = () => {
@@ -1680,7 +1690,7 @@ const SlimeSoccer = () => {
       if (!ai.lastBallPos) ai.lastBallPos = { x: ball.x, y: ball.y };
       if (!ai.stuckCounter) ai.stuckCounter = 0;
 
-      // Decision cooldown - smooth movement towards target
+      // Decision cooldown - aggressive movement towards target
       if (ai.decisionCooldown > 0) {
         ai.decisionCooldown--;
 
@@ -1688,10 +1698,10 @@ const SlimeSoccer = () => {
         const diffY = ai.targetY - ai.y;
         const dist = Math.sqrt(diffX * diffX + diffY * diffY);
 
-        if (dist > 10) {
-          const speedMultiplier = Math.min(dist / 50, 1.2);
-          ai.vx = (diffX / dist) * SLIME_SPEED * speedMultiplier;
-          ai.vy = (diffY / dist) * SLIME_SPEED * speedMultiplier;
+        if (dist > 8) {
+          const speedMultiplier = Math.min(dist / 40, 1.4); // Faster aggressive movement
+          ai.vx = (diffX / dist) * SLIME_SPEED * 1.15 * speedMultiplier;
+          ai.vy = (diffY / dist) * SLIME_SPEED * 1.15 * speedMultiplier;
         } else {
           ai.vx = 0;
           ai.vy = 0;
@@ -1699,16 +1709,16 @@ const SlimeSoccer = () => {
         return;
       }
 
-      // Stable start - wait at starting position initially
-      if (ai.stableStart && timeLeft > 55) {
+      // Stable start - wait at starting position briefly
+      if (ai.stableStart && timeLeft > 57) { // Shorter wait time
         ai.targetX = leftX;
         ai.targetY = leftY;
         ai.vx = 0;
         ai.vy = 0;
         const distToBall = Math.sqrt(Math.pow(ball.x - ai.x, 2) + Math.pow(ball.y - ai.y, 2));
-        if (distToBall < 200 || timeLeft <= 55) {
+        if (distToBall < 250 || timeLeft <= 57) { // React faster to ball approach
           ai.stableStart = false;
-          ai.decisionCooldown = 15;
+          ai.decisionCooldown = 10; // Shorter cooldown
         }
         return;
       }
@@ -1785,114 +1795,142 @@ const SlimeSoccer = () => {
       let newTargetX = ai.targetX;
       let newTargetY = ai.targetY;
       let shouldGrab = false;
-      let moveSpeed = SLIME_SPEED;
+      let moveSpeed = SLIME_SPEED * 1.15; // Base speed boost for more aggressive AI
 
-      // DEFENSE: Ball is in AI's half or moving towards AI goal
-      if (ballInAIHalf || ballMovingTowardsAIGoal) {
-        // Defensive positioning - get between ball and AI goal
-        const defenseY = Math.max(ball.y - SLIME_RADIUS * 2, GROUND_HEIGHT + SLIME_RADIUS + 20);
+      // Calculate how dangerous the situation is for defense
+      const ballDangerZone = ball.y < GAME_HEIGHT * 0.25; // Ball very close to AI goal
+      const ballSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+      const needsUrgentDefense = ballMovingTowardsAIGoal && ballDangerZone && ballSpeed > 2;
 
-        // If ball is heading towards goal, intercept it
-        if (ballMovingTowardsAIGoal && ball.y < GAME_HEIGHT * 0.4) {
-          // Emergency defense - position in front of ball trajectory
-          let interceptX = ball.x;
-          let interceptY = ball.y;
+      // DEFENSE: Only defend when ball is actively threatening AI goal
+      if (needsUrgentDefense || (ballMovingTowardsAIGoal && ball.y < GAME_HEIGHT * 0.35)) {
+        // Emergency defense - intercept the ball
+        let interceptX = ball.x;
+        let interceptY = ball.y;
 
-          // Find where ball will be
-          for (let pred of predictions) {
-            if (pred.y < GAME_HEIGHT * 0.3) {
-              const timeToReach = Math.sqrt(Math.pow(ai.x - pred.x, 2) + Math.pow(ai.y - pred.y, 2)) / (SLIME_SPEED * 1.3);
-              if (timeToReach <= pred.time + 3) {
-                interceptX = pred.x;
-                interceptY = pred.y;
-                break;
-              }
-            }
-          }
-
-          newTargetX = interceptX;
-          newTargetY = Math.max(interceptY - SLIME_RADIUS, GROUND_HEIGHT + SLIME_RADIUS + 10);
-          moveSpeed = SLIME_SPEED * 1.3;
-        } else {
-          // Standard defense - stay between ball and goal
-          newTargetX = ball.x;
-          newTargetY = defenseY;
-        }
-
-        // If very close to ball, try to grab and clear
-        if (aiDistToBall < SLIME_RADIUS + BALL_RADIUS + 30) {
-          shouldGrab = true;
-        }
-
-        // If ball is stuck near AI goal, be more aggressive
-        if (ai.stuckCounter > 25 && ball.y < GAME_HEIGHT * 0.35) {
-          newTargetY = ball.y + SLIME_RADIUS;
-          newTargetX = ball.x + (Math.random() > 0.5 ? 30 : -30);
-        }
-      }
-      // ATTACK: Ball is in human's half or AI has clear shot
-      else {
-        // Offensive positioning - push ball towards human goal
-        const attackOffset = 25; // Position slightly behind ball to push it
-
-        // Direct attack - go to ball
-        newTargetX = ball.x;
-        newTargetY = ball.y - attackOffset; // Position above ball to push it down
-
-        // If ball is near human goal, be aggressive
-        if (ball.y > GAME_HEIGHT * 0.65) {
-          moveSpeed = SLIME_SPEED * 1.2;
-
-          // Try to push ball into goal - position to direct it towards goal center
-          if (ball.x < goalStart) {
-            // Ball is left of goal, push from left side
-            newTargetX = ball.x - SLIME_RADIUS * 0.5;
-            newTargetY = ball.y - SLIME_RADIUS;
-          } else if (ball.x > goalEnd) {
-            // Ball is right of goal, push from right side
-            newTargetX = ball.x + SLIME_RADIUS * 0.5;
-            newTargetY = ball.y - SLIME_RADIUS;
-          } else {
-            // Ball is in front of goal, push straight down
-            newTargetX = ball.x;
-            newTargetY = ball.y - SLIME_RADIUS;
-          }
-        }
-
-        // Predict where ball will be and intercept
+        // Find where ball will be
         for (let pred of predictions) {
-          if (pred.y > GAME_HEIGHT * 0.5 && pred.time < 25) {
-            const timeToReach = Math.sqrt(Math.pow(ai.x - pred.x, 2) + Math.pow(ai.y - pred.y, 2)) / SLIME_SPEED;
-            if (timeToReach <= pred.time + 5) {
-              newTargetX = pred.x;
-              newTargetY = pred.y - attackOffset;
+          if (pred.y < GAME_HEIGHT * 0.3) {
+            const timeToReach = Math.sqrt(Math.pow(ai.x - pred.x, 2) + Math.pow(ai.y - pred.y, 2)) / (SLIME_SPEED * 1.4);
+            if (timeToReach <= pred.time + 3) {
+              interceptX = pred.x;
+              interceptY = pred.y;
               break;
             }
           }
         }
 
-        // If close to ball and in attacking position, grab to throw towards goal
-        if (aiDistToBall < SLIME_RADIUS + BALL_RADIUS + 25 && ai.y < ball.y) {
+        newTargetX = interceptX;
+        newTargetY = Math.max(interceptY - SLIME_RADIUS, GROUND_HEIGHT + SLIME_RADIUS + 10);
+        moveSpeed = SLIME_SPEED * 1.4; // Fast defense
+
+        // If very close to ball, grab and clear it away
+        if (aiDistToBall < SLIME_RADIUS + BALL_RADIUS + 35) {
+          shouldGrab = true;
+        }
+      }
+      // AGGRESSIVE ATTACK: Most of the time, AI should be attacking
+      else {
+        // Offensive positioning - push ball towards human goal aggressively
+        const attackOffset = 20; // Position closer to ball for more aggressive pushing
+
+        // Always move towards the ball with intent to push it to human goal
+        newTargetX = ball.x;
+        newTargetY = ball.y - attackOffset; // Position above ball to push it down
+        moveSpeed = SLIME_SPEED * 1.2; // Faster attack speed
+
+        // Calculate angle to push ball towards goal center
+        const goalCenterX = GAME_WIDTH / 2;
+        const ballToGoalAngle = Math.atan2(HUMAN_GOAL_Y - ball.y, goalCenterX - ball.x);
+
+        // If ball is in human's half, be very aggressive
+        if (ball.y > GAME_HEIGHT * 0.5) {
+          moveSpeed = SLIME_SPEED * 1.35; // Even faster in attack zone
+
+          // Position to push ball towards goal center
+          if (ball.x < goalStart - 30) {
+            // Ball is left of goal, approach from upper-left to push right-down
+            newTargetX = ball.x - SLIME_RADIUS * 0.7;
+            newTargetY = ball.y - SLIME_RADIUS * 0.8;
+          } else if (ball.x > goalEnd + 30) {
+            // Ball is right of goal, approach from upper-right to push left-down
+            newTargetX = ball.x + SLIME_RADIUS * 0.7;
+            newTargetY = ball.y - SLIME_RADIUS * 0.8;
+          } else {
+            // Ball is in front of goal, push straight down hard
+            newTargetX = ball.x;
+            newTargetY = ball.y - SLIME_RADIUS * 0.6;
+            moveSpeed = SLIME_SPEED * 1.5; // Maximum speed for goal shot
+          }
+        }
+
+        // If ball is near goal scoring zone, go for the kill
+        if (ball.y > GAME_HEIGHT * 0.7) {
+          moveSpeed = SLIME_SPEED * 1.5;
+          // Direct push towards goal
+          newTargetX = ball.x;
+          newTargetY = ball.y - SLIME_RADIUS * 0.5;
+
+          // Try to grab and throw into goal if close
+          if (aiDistToBall < SLIME_RADIUS + BALL_RADIUS + 40) {
+            shouldGrab = true;
+          }
+        }
+
+        // Even in AI's half, be aggressive - chase the ball to counter-attack
+        if (ballInAIHalf && !ballMovingTowardsAIGoal) {
+          // Counter-attack positioning - get behind ball to push it forward
+          newTargetX = ball.x;
+          newTargetY = ball.y - SLIME_RADIUS;
+          moveSpeed = SLIME_SPEED * 1.25;
+
+          // If close to ball, grab it to clear/attack
+          if (aiDistToBall < SLIME_RADIUS + BALL_RADIUS + 30) {
+            shouldGrab = true;
+          }
+        }
+
+        // Predict where ball will be and intercept aggressively
+        for (let pred of predictions) {
+          if (pred.time < 30) {
+            const timeToReach = Math.sqrt(Math.pow(ai.x - pred.x, 2) + Math.pow(ai.y - pred.y, 2)) / (SLIME_SPEED * 1.2);
+            if (timeToReach <= pred.time + 3) {
+              // If prediction is towards human goal, intercept there
+              if (pred.y > ball.y) {
+                newTargetX = pred.x;
+                newTargetY = pred.y - attackOffset;
+              }
+              break;
+            }
+          }
+        }
+
+        // If close to ball and in good position, grab to throw towards goal
+        if (aiDistToBall < SLIME_RADIUS + BALL_RADIUS + 30 && ai.y < ball.y + SLIME_RADIUS) {
           shouldGrab = true;
         }
 
-        // If stuck while attacking, try different approach
-        if (ai.stuckCounter > 20) {
-          newTargetX = ball.x + (Math.sin(currentTime * 0.01) * 50);
-          newTargetY = ball.y - 40;
+        // If stuck while attacking, try aggressive different approach
+        if (ai.stuckCounter > 15) {
+          const escapeAngle = Math.sin(currentTime * 0.015) * 60;
+          newTargetX = ball.x + escapeAngle;
+          newTargetY = ball.y - 30;
+          moveSpeed = SLIME_SPEED * 1.3;
         }
       }
 
-      // NEUTRAL: Ball is around midfield
-      if (Math.abs(ball.y - GAME_HEIGHT / 2) < GAME_HEIGHT * 0.15 && !ballMovingTowardsAIGoal) {
-        // Position ready to contest
+      // NEUTRAL zone - be ready to attack
+      if (Math.abs(ball.y - GAME_HEIGHT / 2) < GAME_HEIGHT * 0.1 && !ballMovingTowardsAIGoal) {
+        // Aggressive contest positioning - try to win the ball
         newTargetX = ball.x;
-        newTargetY = ball.y - SLIME_RADIUS * 1.5;
+        newTargetY = ball.y - SLIME_RADIUS;
+        moveSpeed = SLIME_SPEED * 1.2;
 
-        // If opponent is closer, be defensive
+        // If opponent is closer, still try to contest but with caution
         const opponentDistToBall = Math.sqrt(Math.pow(opponent.x - ball.x, 2) + Math.pow(opponent.y - ball.y, 2));
-        if (opponentDistToBall < aiDistToBall) {
-          newTargetY = Math.min(ball.y - SLIME_RADIUS * 2, GAME_HEIGHT * 0.4);
+        if (opponentDistToBall < aiDistToBall * 0.7) {
+          // Opponent much closer, position to intercept their clearance
+          newTargetY = Math.min(ball.y - SLIME_RADIUS * 1.5, GAME_HEIGHT * 0.45);
         }
       }
 
@@ -1900,12 +1938,12 @@ const SlimeSoccer = () => {
       newTargetX = Math.max(SLIME_RADIUS, Math.min(GAME_WIDTH - SLIME_RADIUS, newTargetX));
       newTargetY = Math.max(GROUND_HEIGHT + SLIME_RADIUS, Math.min(GAME_HEIGHT - GROUND_HEIGHT - SLIME_RADIUS, newTargetY));
 
-      // Update target if significantly different
+      // Update target if significantly different - more responsive AI
       const targetDiff = Math.sqrt(Math.pow(newTargetX - ai.targetX, 2) + Math.pow(newTargetY - ai.targetY, 2));
-      if (targetDiff > 20) {
+      if (targetDiff > 15) { // Lower threshold for faster response
         ai.targetX = newTargetX;
         ai.targetY = newTargetY;
-        ai.decisionCooldown = 8;
+        ai.decisionCooldown = 5; // Shorter cooldown for more aggressive play
       }
 
       // Handle grabbing
@@ -1915,13 +1953,13 @@ const SlimeSoccer = () => {
         ai.isGrabbing = false;
       }
 
-      // Movement towards target
+      // Movement towards target - aggressive pursuit
       const diffX = ai.targetX - ai.x;
       const diffY = ai.targetY - ai.y;
       const dist = Math.sqrt(diffX * diffX + diffY * diffY);
 
-      if (dist > 10) {
-        const speedMultiplier = Math.min(dist / 50, 1.2);
+      if (dist > 8) { // Lower threshold to keep moving closer
+        const speedMultiplier = Math.min(dist / 40, 1.4); // Higher cap for faster movement
         ai.vx = (diffX / dist) * moveSpeed * speedMultiplier;
         ai.vy = (diffY / dist) * moveSpeed * speedMultiplier;
       } else {
@@ -2400,7 +2438,70 @@ const SlimeSoccer = () => {
         }
       }
     }
-    
+
+    // Stuck ball detection - if ball stuck for 4+ seconds, bounce to center
+    const STUCK_THRESHOLD_MS = 4000; // 4 seconds
+    const STUCK_MOVEMENT_THRESHOLD = 15; // pixels - ball must move at least this much to not be considered stuck
+    const currentTime = Date.now();
+
+    // Only check for stuck ball when it's not halted and not grabbed
+    if (!ballIsHalted && !state.ball.grabbedBy && state.ball.haltedUntil !== Infinity) {
+      const ballMoved = Math.abs(state.ball.x - state.ball.lastStuckCheckPos.x) > STUCK_MOVEMENT_THRESHOLD ||
+                        Math.abs(state.ball.y - state.ball.lastStuckCheckPos.y) > STUCK_MOVEMENT_THRESHOLD;
+
+      if (ballMoved) {
+        // Ball moved - reset stuck timer
+        state.ball.stuckSince = null;
+        state.ball.lastStuckCheckPos = { x: state.ball.x, y: state.ball.y };
+
+        // Check if we reached the center during bounce-to-center mode
+        if (state.ball.bouncingToCenter) {
+          const centerX = GAME_WIDTH / 2;
+          const centerY = GAME_HEIGHT / 2;
+          const distToCenter = Math.sqrt(Math.pow(state.ball.x - centerX, 2) + Math.pow(state.ball.y - centerY, 2));
+
+          if (distToCenter < 50) {
+            // Reached center - stop bouncing to center mode
+            state.ball.bouncingToCenter = false;
+            state.ball.ignoredCharacter = null;
+          }
+        }
+      } else {
+        // Ball hasn't moved much
+        if (state.ball.stuckSince === null) {
+          state.ball.stuckSince = currentTime;
+        } else if (currentTime - state.ball.stuckSince >= STUCK_THRESHOLD_MS && !state.ball.bouncingToCenter) {
+          // Ball has been stuck for 4+ seconds - bounce to center!
+          const centerX = GAME_WIDTH / 2;
+          const centerY = GAME_HEIGHT / 2;
+
+          // Calculate direction to center
+          const dx = centerX - state.ball.x;
+          const dy = centerY - state.ball.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist > 10) {
+            // Determine which character is closest (to ignore during bounce)
+            const distToLeft = Math.sqrt(Math.pow(state.ball.x - state.leftSlime.x, 2) + Math.pow(state.ball.y - state.leftSlime.y, 2));
+            const distToRight = Math.sqrt(Math.pow(state.ball.x - state.rightSlime.x, 2) + Math.pow(state.ball.y - state.rightSlime.y, 2));
+
+            // Ignore the closest character (most likely the one blocking the ball)
+            state.ball.ignoredCharacter = distToLeft < distToRight ? 'left' : 'right';
+            state.ball.bouncingToCenter = true;
+
+            // Give ball velocity towards center
+            const bounceSpeed = 5;
+            state.ball.vx = (dx / dist) * bounceSpeed;
+            state.ball.vy = (dy / dist) * bounceSpeed;
+
+            // Reset stuck timer
+            state.ball.stuckSince = null;
+            state.ball.lastStuckCheckPos = { x: state.ball.x, y: state.ball.y };
+          }
+        }
+      }
+    }
+
     if (BOARD_ALIGNMENT === 'bottom_top') {
       // Bottom_top mode: walls on left/right, goals on top/bottom (centered, 50% width)
       const goalStart = (GAME_WIDTH - GOAL_WIDTH) / 2;
@@ -2496,6 +2597,12 @@ const SlimeSoccer = () => {
     if (checkCollisions) {
       [state.leftSlime, state.rightSlime].forEach((slime, index) => {
         const slimeName = index === 0 ? 'left' : 'right';
+
+        // Skip collision with ignored character when ball is bouncing to center
+        if (state.ball.bouncingToCenter && state.ball.ignoredCharacter === slimeName) {
+          return; // Skip this character - ball passes through
+        }
+
         const otherSlime = index === 0 ? state.rightSlime : state.leftSlime;
         const dx = state.ball.x - slime.x;
         const dy = state.ball.y - slime.y;
@@ -2505,6 +2612,12 @@ const SlimeSoccer = () => {
           // In bottom_top mode, unhalt the ball when hit
           if (BOARD_ALIGNMENT === 'bottom_top' && state.ball.haltedUntil === Infinity) {
             state.ball.haltedUntil = 0;
+          }
+
+          // If ball was bouncing to center and hit a non-ignored character, end bounce mode
+          if (state.ball.bouncingToCenter) {
+            state.ball.bouncingToCenter = false;
+            state.ball.ignoredCharacter = null;
           }
 
           if (state.ball.grabbedBy && state.ball.grabbedBy !== slimeName) {
