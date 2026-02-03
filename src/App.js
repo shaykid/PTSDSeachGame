@@ -1663,19 +1663,281 @@ const SlimeSoccer = () => {
   // AI logic
   const updateAI = useCallback(() => {
     if (playerMode !== 'single') return;
-    
+
     const state = gameStateRef.current;
     const ai = state.leftSlime;
     const opponent = state.rightSlime;
     const ball = state.ball;
     const currentTime = Date.now();
-    const { leftX } = computeStartPositions(GAME_WIDTH);
-    
+    const { leftX, leftY } = computeStartPositions(GAME_WIDTH, GAME_HEIGHT);
+
+    // bottom_top mode: AI is at top (low Y), human is at bottom (high Y)
+    // AI goal is at top (GROUND_HEIGHT), human goal is at bottom (GAME_HEIGHT - GROUND_HEIGHT)
+    if (BOARD_ALIGNMENT === 'bottom_top') {
+      // Initialize AI-specific state
+      if (!ai.targetX) ai.targetX = ai.x;
+      if (!ai.targetY) ai.targetY = ai.y;
+      if (!ai.lastBallPos) ai.lastBallPos = { x: ball.x, y: ball.y };
+      if (!ai.stuckCounter) ai.stuckCounter = 0;
+
+      // Decision cooldown - smooth movement towards target
+      if (ai.decisionCooldown > 0) {
+        ai.decisionCooldown--;
+
+        const diffX = ai.targetX - ai.x;
+        const diffY = ai.targetY - ai.y;
+        const dist = Math.sqrt(diffX * diffX + diffY * diffY);
+
+        if (dist > 10) {
+          const speedMultiplier = Math.min(dist / 50, 1.2);
+          ai.vx = (diffX / dist) * SLIME_SPEED * speedMultiplier;
+          ai.vy = (diffY / dist) * SLIME_SPEED * speedMultiplier;
+        } else {
+          ai.vx = 0;
+          ai.vy = 0;
+        }
+        return;
+      }
+
+      // Stable start - wait at starting position initially
+      if (ai.stableStart && timeLeft > 55) {
+        ai.targetX = leftX;
+        ai.targetY = leftY;
+        ai.vx = 0;
+        ai.vy = 0;
+        const distToBall = Math.sqrt(Math.pow(ball.x - ai.x, 2) + Math.pow(ball.y - ai.y, 2));
+        if (distToBall < 200 || timeLeft <= 55) {
+          ai.stableStart = false;
+          ai.decisionCooldown = 15;
+        }
+        return;
+      }
+
+      // Goal positions for bottom_top mode
+      const goalStart = (GAME_WIDTH - GOAL_WIDTH) / 2;
+      const goalEnd = goalStart + GOAL_WIDTH;
+      const goalCenterX = GAME_WIDTH / 2;
+      const AI_GOAL_Y = GROUND_HEIGHT; // Top of field (AI defends)
+      const HUMAN_GOAL_Y = GAME_HEIGHT - GROUND_HEIGHT; // Bottom of field (AI attacks)
+
+      // Ball prediction (no gravity in bottom_top mode)
+      let predictions = [];
+      let tempX = ball.x;
+      let tempY = ball.y;
+      let tempVx = ball.vx;
+      let tempVy = ball.vy;
+
+      for (let t = 0; t < 60; t++) {
+        // No gravity in bottom_top mode, only friction
+        tempVx *= BALL_DAMPING;
+        tempVy *= BALL_DAMPING;
+        tempX += tempVx;
+        tempY += tempVy;
+
+        // Wall bounces
+        if (tempX < BALL_RADIUS) {
+          tempX = BALL_RADIUS;
+          tempVx = -tempVx * BALL_BOUNCE_DAMPING;
+        }
+        if (tempX > GAME_WIDTH - BALL_RADIUS) {
+          tempX = GAME_WIDTH - BALL_RADIUS;
+          tempVx = -tempVx * BALL_BOUNCE_DAMPING;
+        }
+        if (tempY < GROUND_HEIGHT + BALL_RADIUS) {
+          // Check if in goal
+          if (tempX > goalStart && tempX < goalEnd) {
+            // Ball entering AI goal
+          } else {
+            tempY = GROUND_HEIGHT + BALL_RADIUS;
+            tempVy = -tempVy * BALL_BOUNCE_DAMPING;
+          }
+        }
+        if (tempY > GAME_HEIGHT - GROUND_HEIGHT - BALL_RADIUS) {
+          // Check if in goal
+          if (tempX > goalStart && tempX < goalEnd) {
+            // Ball entering human goal
+          } else {
+            tempY = GAME_HEIGHT - GROUND_HEIGHT - BALL_RADIUS;
+            tempVy = -tempVy * BALL_BOUNCE_DAMPING;
+          }
+        }
+
+        predictions.push({ x: tempX, y: tempY, vx: tempVx, vy: tempVy, time: t });
+      }
+
+      // Calculate distances and ball state
+      const aiDistToBall = Math.sqrt(Math.pow(ai.x - ball.x, 2) + Math.pow(ai.y - ball.y, 2));
+      const ballDistToAIGoal = Math.abs(ball.y - AI_GOAL_Y);
+      const ballDistToHumanGoal = Math.abs(ball.y - HUMAN_GOAL_Y);
+      const ballMovingTowardsAIGoal = ball.vy < -1;
+      const ballMovingTowardsHumanGoal = ball.vy > 1;
+      const ballInAIHalf = ball.y < GAME_HEIGHT / 2;
+
+      // Stuck detection
+      const ballMoved = Math.abs(ball.x - ai.lastBallPos.x) > 3 || Math.abs(ball.y - ai.lastBallPos.y) > 3;
+      if (!ballMoved && aiDistToBall < 100) {
+        ai.stuckCounter++;
+      } else {
+        ai.stuckCounter = 0;
+      }
+      ai.lastBallPos = { x: ball.x, y: ball.y };
+
+      let newTargetX = ai.targetX;
+      let newTargetY = ai.targetY;
+      let shouldGrab = false;
+      let moveSpeed = SLIME_SPEED;
+
+      // DEFENSE: Ball is in AI's half or moving towards AI goal
+      if (ballInAIHalf || ballMovingTowardsAIGoal) {
+        // Defensive positioning - get between ball and AI goal
+        const defenseY = Math.max(ball.y - SLIME_RADIUS * 2, GROUND_HEIGHT + SLIME_RADIUS + 20);
+
+        // If ball is heading towards goal, intercept it
+        if (ballMovingTowardsAIGoal && ball.y < GAME_HEIGHT * 0.4) {
+          // Emergency defense - position in front of ball trajectory
+          let interceptX = ball.x;
+          let interceptY = ball.y;
+
+          // Find where ball will be
+          for (let pred of predictions) {
+            if (pred.y < GAME_HEIGHT * 0.3) {
+              const timeToReach = Math.sqrt(Math.pow(ai.x - pred.x, 2) + Math.pow(ai.y - pred.y, 2)) / (SLIME_SPEED * 1.3);
+              if (timeToReach <= pred.time + 3) {
+                interceptX = pred.x;
+                interceptY = pred.y;
+                break;
+              }
+            }
+          }
+
+          newTargetX = interceptX;
+          newTargetY = Math.max(interceptY - SLIME_RADIUS, GROUND_HEIGHT + SLIME_RADIUS + 10);
+          moveSpeed = SLIME_SPEED * 1.3;
+        } else {
+          // Standard defense - stay between ball and goal
+          newTargetX = ball.x;
+          newTargetY = defenseY;
+        }
+
+        // If very close to ball, try to grab and clear
+        if (aiDistToBall < SLIME_RADIUS + BALL_RADIUS + 30) {
+          shouldGrab = true;
+        }
+
+        // If ball is stuck near AI goal, be more aggressive
+        if (ai.stuckCounter > 25 && ball.y < GAME_HEIGHT * 0.35) {
+          newTargetY = ball.y + SLIME_RADIUS;
+          newTargetX = ball.x + (Math.random() > 0.5 ? 30 : -30);
+        }
+      }
+      // ATTACK: Ball is in human's half or AI has clear shot
+      else {
+        // Offensive positioning - push ball towards human goal
+        const attackOffset = 25; // Position slightly behind ball to push it
+
+        // Direct attack - go to ball
+        newTargetX = ball.x;
+        newTargetY = ball.y - attackOffset; // Position above ball to push it down
+
+        // If ball is near human goal, be aggressive
+        if (ball.y > GAME_HEIGHT * 0.65) {
+          moveSpeed = SLIME_SPEED * 1.2;
+
+          // Try to push ball into goal - position to direct it towards goal center
+          if (ball.x < goalStart) {
+            // Ball is left of goal, push from left side
+            newTargetX = ball.x - SLIME_RADIUS * 0.5;
+            newTargetY = ball.y - SLIME_RADIUS;
+          } else if (ball.x > goalEnd) {
+            // Ball is right of goal, push from right side
+            newTargetX = ball.x + SLIME_RADIUS * 0.5;
+            newTargetY = ball.y - SLIME_RADIUS;
+          } else {
+            // Ball is in front of goal, push straight down
+            newTargetX = ball.x;
+            newTargetY = ball.y - SLIME_RADIUS;
+          }
+        }
+
+        // Predict where ball will be and intercept
+        for (let pred of predictions) {
+          if (pred.y > GAME_HEIGHT * 0.5 && pred.time < 25) {
+            const timeToReach = Math.sqrt(Math.pow(ai.x - pred.x, 2) + Math.pow(ai.y - pred.y, 2)) / SLIME_SPEED;
+            if (timeToReach <= pred.time + 5) {
+              newTargetX = pred.x;
+              newTargetY = pred.y - attackOffset;
+              break;
+            }
+          }
+        }
+
+        // If close to ball and in attacking position, grab to throw towards goal
+        if (aiDistToBall < SLIME_RADIUS + BALL_RADIUS + 25 && ai.y < ball.y) {
+          shouldGrab = true;
+        }
+
+        // If stuck while attacking, try different approach
+        if (ai.stuckCounter > 20) {
+          newTargetX = ball.x + (Math.sin(currentTime * 0.01) * 50);
+          newTargetY = ball.y - 40;
+        }
+      }
+
+      // NEUTRAL: Ball is around midfield
+      if (Math.abs(ball.y - GAME_HEIGHT / 2) < GAME_HEIGHT * 0.15 && !ballMovingTowardsAIGoal) {
+        // Position ready to contest
+        newTargetX = ball.x;
+        newTargetY = ball.y - SLIME_RADIUS * 1.5;
+
+        // If opponent is closer, be defensive
+        const opponentDistToBall = Math.sqrt(Math.pow(opponent.x - ball.x, 2) + Math.pow(opponent.y - ball.y, 2));
+        if (opponentDistToBall < aiDistToBall) {
+          newTargetY = Math.min(ball.y - SLIME_RADIUS * 2, GAME_HEIGHT * 0.4);
+        }
+      }
+
+      // Boundary enforcement for AI targets
+      newTargetX = Math.max(SLIME_RADIUS, Math.min(GAME_WIDTH - SLIME_RADIUS, newTargetX));
+      newTargetY = Math.max(GROUND_HEIGHT + SLIME_RADIUS, Math.min(GAME_HEIGHT - GROUND_HEIGHT - SLIME_RADIUS, newTargetY));
+
+      // Update target if significantly different
+      const targetDiff = Math.sqrt(Math.pow(newTargetX - ai.targetX, 2) + Math.pow(newTargetY - ai.targetY, 2));
+      if (targetDiff > 20) {
+        ai.targetX = newTargetX;
+        ai.targetY = newTargetY;
+        ai.decisionCooldown = 8;
+      }
+
+      // Handle grabbing
+      if (shouldGrab && !ai.isGrabbing) {
+        ai.isGrabbing = true;
+      } else if (!shouldGrab) {
+        ai.isGrabbing = false;
+      }
+
+      // Movement towards target
+      const diffX = ai.targetX - ai.x;
+      const diffY = ai.targetY - ai.y;
+      const dist = Math.sqrt(diffX * diffX + diffY * diffY);
+
+      if (dist > 10) {
+        const speedMultiplier = Math.min(dist / 50, 1.2);
+        ai.vx = (diffX / dist) * moveSpeed * speedMultiplier;
+        ai.vy = (diffY / dist) * moveSpeed * speedMultiplier;
+      } else {
+        ai.vx = 0;
+        ai.vy = 0;
+      }
+
+      return;
+    }
+
+    // Original right_left mode AI logic
     if (ai.decisionCooldown > 0) {
       ai.decisionCooldown--;
       const difference = ai.targetX - ai.x;
       const absDistance = Math.abs(difference);
-      
+
       if (absDistance > 10) {
         const speedMultiplier = Math.min(absDistance / 50, 1.0);
         ai.vx = Math.sign(difference) * SLIME_SPEED * speedMultiplier;
@@ -1684,7 +1946,7 @@ const SlimeSoccer = () => {
       }
       return;
     }
-    
+
     if (ai.stableStart && timeLeft > 55) {
       ai.targetX = leftX;
       ai.vx = 0;
@@ -1694,26 +1956,26 @@ const SlimeSoccer = () => {
       }
       return;
     }
-    
+
     const FIELD_WIDTH = GAME_WIDTH;
     const OPPONENT_GOAL_X = FIELD_WIDTH - GOAL_WIDTH / 2;
     const AI_GOAL_X = GOAL_WIDTH / 2;
-    
+
     const randomFactor = Math.sin(currentTime * 0.001) * 0.5 + 0.5;
     const aggressiveness = 0.8;
-    
+
     let predictions = [];
     let tempX = ball.x;
     let tempY = ball.y;
     let tempVx = ball.vx;
     let tempVy = ball.vy;
-    
+
     for (let t = 0; t < 100; t++) {
       tempVy += BALL_GRAVITY;
       tempVx *= BALL_DAMPING;
       tempX += tempVx;
       tempY += tempVy;
-      
+
       if (tempX < BALL_RADIUS) {
         tempX = BALL_RADIUS;
         tempVx = -tempVx * BALL_BOUNCE_DAMPING;
@@ -1722,16 +1984,16 @@ const SlimeSoccer = () => {
         tempX = FIELD_WIDTH - BALL_RADIUS;
         tempVx = -tempVx * BALL_BOUNCE_DAMPING;
       }
-      
+
       predictions.push({ x: tempX, y: tempY, vx: tempVx, vy: tempVy, time: t });
-      
+
       if (tempY > GAME_HEIGHT - GROUND_HEIGHT - BALL_RADIUS) {
         tempY = GAME_HEIGHT - GROUND_HEIGHT - BALL_RADIUS;
         tempVy = -tempVy * BALL_BOUNCE_DAMPING;
         break;
       }
     }
-    
+
     const ballDistanceToOpponentGoal = Math.abs(ball.x - OPPONENT_GOAL_X);
     const ballDistanceToAIGoal = Math.abs(ball.x - AI_GOAL_X);
     const aiDistanceToBall = Math.abs(ai.x - ball.x);
@@ -1739,10 +2001,10 @@ const SlimeSoccer = () => {
     const ballMovingTowardsAIGoal = ball.vx < -1;
     const ballMovingTowardsOpponentGoal = ball.vx > 1;
     const ballHeight = GAME_HEIGHT - GROUND_HEIGHT - ball.y;
-    
+
     if (!ai.lastBallY) ai.lastBallY = ball.y;
     if (!ai.stuckCounter) ai.stuckCounter = 0;
-    
+
     const ballStuck = Math.abs(ball.y - ai.lastBallY) < 5 && Math.abs(ball.vx) < 2;
     if (ballStuck) {
       ai.stuckCounter++;
@@ -1750,19 +2012,19 @@ const SlimeSoccer = () => {
       ai.stuckCounter = 0;
     }
     ai.lastBallY = ball.y;
-    
+
     let newTargetX = ai.targetX;
     let shouldJump = false;
     let shouldGrab = false;
     let moveSpeed = SLIME_SPEED;
-    
-    if (ballDistanceToOpponentGoal < ballDistanceToAIGoal * 1.5 || 
+
+    if (ballDistanceToOpponentGoal < ballDistanceToAIGoal * 1.5 ||
         (ball.x > FIELD_WIDTH * 0.35 && !ballMovingTowardsAIGoal)) {
-      
+
       const directAttackX = ball.x - 30;
       const overheadAttackX = ball.x - 45;
       const underAttackX = ball.x - 20;
-      
+
       if (ballHeight > 60 && aiDistanceToBall < 150) {
         newTargetX = overheadAttackX;
       } else if (ballHeight < 30 && aiDistanceToBall < 100) {
@@ -1770,9 +2032,9 @@ const SlimeSoccer = () => {
       } else {
         newTargetX = directAttackX;
       }
-      
+
       moveSpeed = SLIME_SPEED * 1.1;
-      
+
       if (aiDistanceToBall < 100) {
         if (ai.stuckCounter > 30) {
           shouldJump = true;
@@ -1781,20 +2043,20 @@ const SlimeSoccer = () => {
         else if (ballHeight < 35 && aiDistanceToBall < 60 && !ai.hasBall && ball.vy > -2) {
           shouldGrab = true;
         }
-        else if ((ballHeight > 30 && ballHeight < 90) || 
+        else if ((ballHeight > 30 && ballHeight < 90) ||
                  (ball.x > FIELD_WIDTH * 0.6 && ballHeight < 120)) {
           if (ai.y >= GAME_HEIGHT - GROUND_HEIGHT - 1) {
             const timeToReachBall = Math.abs(ai.x - ball.x) / SLIME_SPEED;
             const ballHeightWhenReached = ball.y + ball.vy * timeToReachBall + 0.5 * GRAVITY * timeToReachBall * timeToReachBall;
-            
-            if (ballHeightWhenReached > GAME_HEIGHT - GROUND_HEIGHT - 100 && 
+
+            if (ballHeightWhenReached > GAME_HEIGHT - GROUND_HEIGHT - 100 &&
                 ballHeightWhenReached < GAME_HEIGHT - GROUND_HEIGHT - 20) {
               shouldJump = true;
             }
           }
         }
       }
-      
+
       if (ai.hasBall) {
         const angleToGoal = Math.atan2(0, OPPONENT_GOAL_X - ai.x);
         if (Math.abs(angleToGoal) < 0.5 || ai.x > FIELD_WIDTH * 0.7) {
@@ -1803,9 +2065,9 @@ const SlimeSoccer = () => {
       }
     }
     else if (ball.x < FIELD_WIDTH * 0.65 || ballMovingTowardsAIGoal) {
-      
+
       let bestInterceptX = ball.x;
-      
+
       for (let pred of predictions) {
         if (pred.x < FIELD_WIDTH * 0.4) {
           const timeToReach = Math.abs(ai.x - pred.x) / (SLIME_SPEED * 1.2);
@@ -1815,18 +2077,18 @@ const SlimeSoccer = () => {
           }
         }
       }
-      
+
       newTargetX = bestInterceptX;
-      
+
       if (ball.x < GOAL_WIDTH * 2.5 && ballMovingTowardsAIGoal) {
         newTargetX = Math.max(ball.x - 10, SLIME_RADIUS);
         moveSpeed = SLIME_SPEED * 1.2;
-        
+
         if (aiDistanceToBall < 120 && ballHeight < 100) {
           shouldJump = true;
         }
       }
-      
+
       if (ai.stuckCounter > 20 && ball.x < FIELD_WIDTH * 0.3) {
         shouldJump = true;
         newTargetX = ball.x + 30;
@@ -1834,9 +2096,9 @@ const SlimeSoccer = () => {
     }
     else {
       newTargetX = FIELD_WIDTH * 0.4;
-      
+
       for (let pred of predictions) {
-        if (pred.y < GAME_HEIGHT - GROUND_HEIGHT - 50 && 
+        if (pred.y < GAME_HEIGHT - GROUND_HEIGHT - 50 &&
             Math.abs(pred.x - FIELD_WIDTH * 0.4) < 100) {
           const timeToReach = Math.abs(ai.x - pred.x) / SLIME_SPEED;
           if (timeToReach < pred.time && pred.time < 30) {
@@ -1849,34 +2111,35 @@ const SlimeSoccer = () => {
         }
       }
     }
-    
+
     if (Math.abs(newTargetX - ai.targetX) > 15) {
       ai.targetX = newTargetX;
       ai.decisionCooldown = 10;
     }
-    
+
     if (shouldGrab && !ai.isGrabbing && ai.y >= GAME_HEIGHT - GROUND_HEIGHT - 1) {
       ai.isGrabbing = true;
     } else if (!shouldGrab) {
       ai.isGrabbing = false;
     }
-    
+
     const difference = ai.targetX - ai.x;
     const absDistance = Math.abs(difference);
-    
+
     if (absDistance > 10) {
       const speedMultiplier = Math.min(absDistance / 50, 1.0);
       ai.vx = Math.sign(difference) * moveSpeed * speedMultiplier;
     } else {
       ai.vx = 0;
     }
-    
+
     if (shouldJump && ai.vy === 0 && !ai.isGrabbing) {
       ai.vy = SLIME_JUMP_POWER;
     }
-    
+
   }, [
     BALL_RADIUS,
+    BOARD_ALIGNMENT,
     GAME_HEIGHT,
     GAME_WIDTH,
     GOAL_WIDTH,
@@ -2006,9 +2269,9 @@ const SlimeSoccer = () => {
 
         // Boundary checking - players can move full field up to opponent's goalpost
         const isBottomPlayer = index === 1; // rightSlime is bottom player (user-controlled)
-        // In remote mode, allow full field movement (up to opponent's goal area)
-        // In other modes, keep midline restriction
-        const useFullField = playerMode === 'remote';
+        // In single-player and remote modes, allow full field movement (up to opponent's goal area)
+        // In local multiplayer, keep midline restriction to prevent camping
+        const useFullField = playerMode === 'single' || playerMode === 'remote';
         const minY = isBottomPlayer
           ? (useFullField ? GROUND_HEIGHT + SLIME_RADIUS : GAME_HEIGHT / 2 + SLIME_RADIUS)
           : GROUND_HEIGHT + SLIME_RADIUS;
