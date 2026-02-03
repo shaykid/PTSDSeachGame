@@ -1800,10 +1800,21 @@ const SlimeSoccer = () => {
       // Calculate how dangerous the situation is for defense
       const ballDangerZone = ball.y < GAME_HEIGHT * 0.25; // Ball very close to AI goal
       const ballSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+      const ballBetweenAIGoalAndAI = ball.y < ai.y - SLIME_RADIUS * 0.2;
+      const ballIdleBetweenAIGoalAndAI = ballBetweenAIGoalAndAI && ballSpeed < 0.4;
       const needsUrgentDefense = ballMovingTowardsAIGoal && ballDangerZone && ballSpeed > 2;
 
+      // If the ball is idle between the AI and its goal, advance and attack instead of retreating.
+      if (ballIdleBetweenAIGoalAndAI) {
+        newTargetX = ball.x;
+        newTargetY = Math.max(ball.y - SLIME_RADIUS * 0.6, GROUND_HEIGHT + SLIME_RADIUS + 8);
+        moveSpeed = SLIME_SPEED * 1.3;
+        if (aiDistToBall < SLIME_RADIUS + BALL_RADIUS + 35) {
+          shouldGrab = true;
+        }
+      }
       // DEFENSE: Only defend when ball is actively threatening AI goal
-      if (needsUrgentDefense || (ballMovingTowardsAIGoal && ball.y < GAME_HEIGHT * 0.35)) {
+      else if (needsUrgentDefense || (ballMovingTowardsAIGoal && ball.y < GAME_HEIGHT * 0.35)) {
         // Emergency defense - intercept the ball
         let interceptX = ball.x;
         let interceptY = ball.y;
