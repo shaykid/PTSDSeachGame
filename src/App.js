@@ -4676,7 +4676,7 @@ const SlimeSoccer = () => {
           {showGoalCelebration && (
             <div className="fixed inset-0 flex flex-col items-center justify-center pointer-events-none z-50">
               <img
-                src={`${resourceBaseUrl}/ball1.gif`}
+                src={`${resourceBaseUrl}/ball2.gif`}
                 alt="Goal celebration"
                 className="w-48 h-auto"
               />
