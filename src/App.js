@@ -2564,6 +2564,25 @@ const SlimeSoccer = () => {
       state.ball.playerPinningBorderSince = null;
     };
 
+    // Immediate out-of-bounds check - ball completely outside playing area
+    if (BOARD_ALIGNMENT === 'bottom_top') {
+      const goalStart = (GAME_WIDTH - GOAL_WIDTH) / 2;
+      const goalEnd = goalStart + GOAL_WIDTH;
+      const isInGoalX = state.ball.x > goalStart && state.ball.x < goalEnd;
+
+      // Ball is above field (in top goal area) but not in goal opening
+      const isAboveField = state.ball.y < GROUND_HEIGHT && !isInGoalX;
+      // Ball is below field (in bottom goal area) but not in goal opening
+      const isBelowField = state.ball.y > GAME_HEIGHT - GROUND_HEIGHT && !isInGoalX;
+      // Ball is off the sides
+      const isOffSides = state.ball.x < 0 || state.ball.x > GAME_WIDTH;
+
+      if ((isAboveField || isBelowField || isOffSides) && !state.ball.grabbedBy) {
+        triggerOutAnimation();
+        resetBallToCenter();
+      }
+    }
+
     if (!state.ball.grabbedBy) {
       if (isTouchingSideBorder) {
         if (state.ball.sideContactSince === null) {
@@ -3533,6 +3552,23 @@ const SlimeSoccer = () => {
       ctx.lineTo(GAME_WIDTH, bottomBorderY);
       ctx.stroke();
 
+      // Immediate out boundaries (solid orange lines)
+      ctx.strokeStyle = 'rgba(255, 165, 0, 0.9)';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([]);
+
+      // Top immediate out line (y = GROUND_HEIGHT)
+      ctx.beginPath();
+      ctx.moveTo(0, GROUND_HEIGHT);
+      ctx.lineTo(GAME_WIDTH, GROUND_HEIGHT);
+      ctx.stroke();
+
+      // Bottom immediate out line (y = GAME_HEIGHT - GROUND_HEIGHT)
+      ctx.beginPath();
+      ctx.moveTo(0, GAME_HEIGHT - GROUND_HEIGHT);
+      ctx.lineTo(GAME_WIDTH, GAME_HEIGHT - GROUND_HEIGHT);
+      ctx.stroke();
+
       ctx.restore();
     }
 
@@ -3544,9 +3580,14 @@ const SlimeSoccer = () => {
       const topBorderY = GROUND_HEIGHT + BALL_RADIUS + borderContactMargin;
       const bottomBorderY = GAME_HEIGHT - GROUND_HEIGHT - BALL_RADIUS - borderContactMargin;
 
+      // Goal opening bounds for immediate out check
+      const goalStart = (GAME_WIDTH - GOAL_WIDTH) / 2;
+      const goalEnd = goalStart + GOAL_WIDTH;
+      const isInGoalX = state.ball.x > goalStart && state.ball.x < goalEnd;
+
       ctx.save();
       ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-      ctx.fillRect(5, GROUND_HEIGHT + 5, 200, 100);
+      ctx.fillRect(5, GROUND_HEIGHT + 5, 220, 130);
 
       ctx.fillStyle = '#fff';
       ctx.font = '12px monospace';
@@ -3563,6 +3604,13 @@ const SlimeSoccer = () => {
       const inBottom = state.ball.y >= bottomBorderY;
       ctx.fillStyle = (inLeft || inRight || inTop || inBottom) ? '#ff0' : '#0f0';
       ctx.fillText(`Border: ${inLeft ? 'L' : '-'}${inRight ? 'R' : '-'}${inTop ? 'T' : '-'}${inBottom ? 'B' : '-'}`, 10, GROUND_HEIGHT + 95);
+
+      // Show immediate out status
+      const isAboveField = state.ball.y < GROUND_HEIGHT && !isInGoalX;
+      const isBelowField = state.ball.y > GAME_HEIGHT - GROUND_HEIGHT && !isInGoalX;
+      ctx.fillStyle = (isAboveField || isBelowField) ? '#f00' : '#0f0';
+      ctx.fillText(`Out zone: y<${GROUND_HEIGHT} or y>${GAME_HEIGHT - GROUND_HEIGHT}`, 10, GROUND_HEIGHT + 110);
+      ctx.fillText(`Immediate OUT: ${isAboveField ? 'ABOVE' : isBelowField ? 'BELOW' : 'no'}`, 10, GROUND_HEIGHT + 125);
       ctx.restore();
     }
 
