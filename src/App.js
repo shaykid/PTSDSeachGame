@@ -2039,7 +2039,6 @@ const SlimeSoccer = () => {
     const ballMovingTowardsAIGoal = ball.vx < -1;
     const ballMovingTowardsOpponentGoal = ball.vx > 1;
     const ballHeight = GAME_HEIGHT - GROUND_HEIGHT - ball.y;
-    const ballSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
 
     if (!ai.lastBallY) ai.lastBallY = ball.y;
     if (!ai.stuckCounter) ai.stuckCounter = 0;
@@ -2057,40 +2056,7 @@ const SlimeSoccer = () => {
     let shouldGrab = false;
     let moveSpeed = SLIME_SPEED;
 
-    const urgentDefense =
-      ballMovingTowardsAIGoal &&
-      ballDistanceToAIGoal < GOAL_WIDTH * 2.2 &&
-      ballSpeed > 1.5;
-
-    if (urgentDefense) {
-      let bestInterceptX = ball.x;
-
-      for (let pred of predictions) {
-        if (pred.x < FIELD_WIDTH * 0.25) {
-          const timeToReach = Math.abs(ai.x - pred.x) / (SLIME_SPEED * 1.35);
-          if (timeToReach <= pred.time + 4) {
-            bestInterceptX = pred.x;
-            break;
-          }
-        }
-      }
-
-      newTargetX = Math.max(bestInterceptX - 5, SLIME_RADIUS);
-      moveSpeed = SLIME_SPEED * 1.25;
-
-      if (aiDistanceToBall < 120 && ballHeight < 110) {
-        shouldJump = true;
-      }
-    } else if (ballSpeed < 0.8 || ai.stuckCounter > 20) {
-      newTargetX = ball.x;
-      moveSpeed = SLIME_SPEED * 1.15;
-      if (aiDistanceToBall < 90 && ballHeight < 40 && !ai.hasBall) {
-        shouldGrab = true;
-      }
-      if (aiDistanceToBall < 140 && ballHeight < 90 && ai.y >= GAME_HEIGHT - GROUND_HEIGHT - 1) {
-        shouldJump = true;
-      }
-    } else if (ballDistanceToOpponentGoal < ballDistanceToAIGoal * 1.5 ||
+    if (ballDistanceToOpponentGoal < ballDistanceToAIGoal * 1.5 ||
         (ball.x > FIELD_WIDTH * 0.35 && !ballMovingTowardsAIGoal)) {
 
       const directAttackX = ball.x - 30;
