@@ -106,6 +106,14 @@ const BOARD_ALIGNMENT = (() => {
   const val = (process.env.REACT_APP_BOARD_ALIGNMENT ?? process.env.BOARD_ALIGNMENT ?? 'bottom_top').toLowerCase();
   return ['right_left', 'bottom_top'].includes(val) ? val : 'bottom_top';
 })();
+const DISPLAY_BORDER = (() => {
+  const val = (process.env.REACT_APP_DISPLAY_BORDER ?? process.env.DISPLAY_BORDER ?? 'true').toLowerCase();
+  return val === 'true';
+})();
+const DEBUG_LOCATION = (() => {
+  const val = (process.env.REACT_APP_DEBUG_LOCATION ?? process.env.DEBUG_LOCATION ?? 'true').toLowerCase();
+  return val === 'true';
+})();
 const TOUCH_MOVE_MIN_KEYS = 2;
 const HISTORY_IMAGE_FILES = [
   '0bb921c5-b38c-4aa1-bed0-678ab0d8fa08.jpeg',
@@ -3488,6 +3496,75 @@ const SlimeSoccer = () => {
     // Draw ball
     const ballType = selectedBall || 'cannabis';
     drawBall(ctx, state.ball.x, state.ball.y, BALL_RADIUS, ballType);
+
+    // Debug: Draw border detection zones
+    if (DISPLAY_BORDER) {
+      const borderContactMargin = 8;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+
+      // Left border detection line
+      const leftBorderX = BALL_RADIUS + borderContactMargin;
+      ctx.beginPath();
+      ctx.moveTo(leftBorderX, GROUND_HEIGHT);
+      ctx.lineTo(leftBorderX, GAME_HEIGHT - GROUND_HEIGHT);
+      ctx.stroke();
+
+      // Right border detection line
+      const rightBorderX = GAME_WIDTH - BALL_RADIUS - borderContactMargin;
+      ctx.beginPath();
+      ctx.moveTo(rightBorderX, GROUND_HEIGHT);
+      ctx.lineTo(rightBorderX, GAME_HEIGHT - GROUND_HEIGHT);
+      ctx.stroke();
+
+      // Top border detection line
+      const topBorderY = GROUND_HEIGHT + BALL_RADIUS + borderContactMargin;
+      ctx.beginPath();
+      ctx.moveTo(0, topBorderY);
+      ctx.lineTo(GAME_WIDTH, topBorderY);
+      ctx.stroke();
+
+      // Bottom border detection line
+      const bottomBorderY = GAME_HEIGHT - GROUND_HEIGHT - BALL_RADIUS - borderContactMargin;
+      ctx.beginPath();
+      ctx.moveTo(0, bottomBorderY);
+      ctx.lineTo(GAME_WIDTH, bottomBorderY);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    // Debug: Show ball and border coordinates
+    if (DEBUG_LOCATION) {
+      const borderContactMargin = 8;
+      const leftBorderX = BALL_RADIUS + borderContactMargin;
+      const rightBorderX = GAME_WIDTH - BALL_RADIUS - borderContactMargin;
+      const topBorderY = GROUND_HEIGHT + BALL_RADIUS + borderContactMargin;
+      const bottomBorderY = GAME_HEIGHT - GROUND_HEIGHT - BALL_RADIUS - borderContactMargin;
+
+      ctx.save();
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.fillRect(5, GROUND_HEIGHT + 5, 200, 100);
+
+      ctx.fillStyle = '#fff';
+      ctx.font = '12px monospace';
+      ctx.fillText(`Ball: (${Math.round(state.ball.x)}, ${Math.round(state.ball.y)})`, 10, GROUND_HEIGHT + 20);
+      ctx.fillText(`Left: x <= ${Math.round(leftBorderX)}`, 10, GROUND_HEIGHT + 35);
+      ctx.fillText(`Right: x >= ${Math.round(rightBorderX)}`, 10, GROUND_HEIGHT + 50);
+      ctx.fillText(`Top: y <= ${Math.round(topBorderY)}`, 10, GROUND_HEIGHT + 65);
+      ctx.fillText(`Bottom: y >= ${Math.round(bottomBorderY)}`, 10, GROUND_HEIGHT + 80);
+
+      // Show if ball is in border zone
+      const inLeft = state.ball.x <= leftBorderX;
+      const inRight = state.ball.x >= rightBorderX;
+      const inTop = state.ball.y <= topBorderY;
+      const inBottom = state.ball.y >= bottomBorderY;
+      ctx.fillStyle = (inLeft || inRight || inTop || inBottom) ? '#ff0' : '#0f0';
+      ctx.fillText(`Border: ${inLeft ? 'L' : '-'}${inRight ? 'R' : '-'}${inTop ? 'T' : '-'}${inBottom ? 'B' : '-'}`, 10, GROUND_HEIGHT + 95);
+      ctx.restore();
+    }
 
     // Draw touch indicators (fingerprint effect)
     if (DISPLAY_TOUCH_MODE !== 'none') {
