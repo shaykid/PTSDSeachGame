@@ -1491,7 +1491,8 @@ const SlimeSoccer = () => {
       bouncingToCenter: false, // true when ball is bouncing to center after being stuck
       ignoredCharacter: null, // 'left' or 'right' - the first character to ignore during bounce
       sideContactSince: null, // timestamp when ball started touching left/right border
-      verticalContactSince: null // timestamp when ball started touching top/bottom border
+      verticalContactSince: null, // timestamp when ball started touching top/bottom border
+      playerPinningBorderSince: null // timestamp when a player started pinning ball against border
     }
   });
 
@@ -2540,6 +2541,7 @@ const SlimeSoccer = () => {
       state.ball.lastStuckCheckPos = { x: state.ball.x, y: state.ball.y };
       state.ball.sideContactSince = null;
       state.ball.verticalContactSince = null;
+      state.ball.playerPinningBorderSince = null;
     };
 
     if (!state.ball.grabbedBy) {
@@ -2565,6 +2567,35 @@ const SlimeSoccer = () => {
     } else {
       state.ball.sideContactSince = null;
       state.ball.verticalContactSince = null;
+    }
+
+    // Player pinning ball against border detection
+    // Uses larger margin and checks if player is pushing ball into border
+    const PINNING_THRESHOLD_MS = 2000; // 2 seconds
+    const pinningBorderMargin = 40; // larger margin for pinning detection
+    const isBallNearBorder =
+      state.ball.x <= BALL_RADIUS + pinningBorderMargin ||
+      state.ball.x >= GAME_WIDTH - BALL_RADIUS - pinningBorderMargin ||
+      state.ball.y <= GROUND_HEIGHT + BALL_RADIUS + pinningBorderMargin ||
+      state.ball.y >= GAME_HEIGHT - GROUND_HEIGHT - BALL_RADIUS - pinningBorderMargin;
+
+    // Check if any player is close enough to be pinning the ball
+    const isPlayerPinning = [state.leftSlime, state.rightSlime].some(slime => {
+      const dx = state.ball.x - slime.x;
+      const dy = state.ball.y - slime.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      // Player is pinning if within collision distance + small margin
+      return distance < SLIME_RADIUS + BALL_RADIUS + 15;
+    });
+
+    if (isBallNearBorder && isPlayerPinning && !state.ball.grabbedBy) {
+      if (state.ball.playerPinningBorderSince === null) {
+        state.ball.playerPinningBorderSince = currentTime;
+      } else if (currentTime - state.ball.playerPinningBorderSince >= PINNING_THRESHOLD_MS) {
+        resetBallToCenter();
+      }
+    } else {
+      state.ball.playerPinningBorderSince = null;
     }
 
     if (BOARD_ALIGNMENT === 'bottom_top') {
