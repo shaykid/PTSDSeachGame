@@ -1512,7 +1512,8 @@ const SlimeSoccer = () => {
       ignoredCharacter: null, // 'left' or 'right' - the first character to ignore during bounce
       sideContactSince: null, // timestamp when ball started touching left/right border
       verticalContactSince: null, // timestamp when ball started touching top/bottom border
-      playerPinningBorderSince: null // timestamp when a player started pinning ball against border
+      playerPinningBorderSince: null, // timestamp when a player started pinning ball against border
+      immediateOutSince: null // timestamp when ball entered immediate out-of-bounds zone
     }
   });
 
@@ -2562,6 +2563,7 @@ const SlimeSoccer = () => {
       state.ball.sideContactSince = null;
       state.ball.verticalContactSince = null;
       state.ball.playerPinningBorderSince = null;
+      state.ball.immediateOutSince = null;
     };
 
     // Immediate out-of-bounds check - ball completely outside playing area
@@ -2579,9 +2581,16 @@ const SlimeSoccer = () => {
 
       const isOutOfField = isOffSides || (isAboveField && !isInGoalX) || (isBelowField && !isInGoalX);
 
-      if (isOutOfField && !state.ball.grabbedBy) {
-        triggerOutAnimation();
-        resetBallToCenter();
+      const IMMEDIATE_OUT_THRESHOLD_MS = 3000; // 3 seconds before triggering out
+      if (isOutOfField) {
+        if (state.ball.immediateOutSince === null) {
+          state.ball.immediateOutSince = currentTime;
+        } else if (currentTime - state.ball.immediateOutSince >= IMMEDIATE_OUT_THRESHOLD_MS) {
+          triggerOutAnimation();
+          resetBallToCenter();
+        }
+      } else {
+        state.ball.immediateOutSince = null;
       }
     }
 
@@ -3621,6 +3630,19 @@ const SlimeSoccer = () => {
         `Immediate OUT: ${isAboveField ? 'ABOVE' : isBelowField ? 'BELOW' : isOffSides ? 'SIDE' : 'no'}`,
         10,
         GROUND_HEIGHT + 125
+      );
+      ctx.fillStyle = state.ball.grabbedBy ? '#f00' : '#0f0';
+      ctx.fillText(
+        `Grabbed: ${state.ball.grabbedBy || 'no'}`,
+        10,
+        GROUND_HEIGHT + 140
+      );
+      const outTimer = state.ball.immediateOutSince ? ((Date.now() - state.ball.immediateOutSince) / 1000).toFixed(1) : '0';
+      ctx.fillStyle = state.ball.immediateOutSince ? '#ff0' : '#0f0';
+      ctx.fillText(
+        `Out timer: ${outTimer}s / 3s`,
+        10,
+        GROUND_HEIGHT + 155
       );
       ctx.restore();
     }
