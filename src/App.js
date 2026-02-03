@@ -3622,6 +3622,12 @@ const SlimeSoccer = () => {
         10,
         GROUND_HEIGHT + 125
       );
+      ctx.fillStyle = state.ball.grabbedBy ? '#f00' : '#0f0';
+      ctx.fillText(
+        `Grabbed: ${state.ball.grabbedBy || 'no'}`,
+        10,
+        GROUND_HEIGHT + 140
+      );
       ctx.restore();
     }
 
