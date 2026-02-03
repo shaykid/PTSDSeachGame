@@ -3526,27 +3526,34 @@ const SlimeSoccer = () => {
     const rightShape =
       (swapLocalMultiplayer ? selectedShapes.left : selectedShapes.right) || 'helmetDesert';
     
-    if (leftShape.startsWith('helmet')) {
-      const type = leftShape.replace('helmet', '').toLowerCase();
-      drawHelmet(ctx, state.leftSlime.x, state.leftSlime.y, SLIME_RADIUS, type);
-    } else if (leftShape === 'labrador') {
-      drawLabrador(ctx, state.leftSlime.x, state.leftSlime.y, SLIME_RADIUS);
-    } else if (leftShape === 'tank') {
-      drawTank(ctx, state.leftSlime.x, state.leftSlime.y, SLIME_RADIUS);
-    } else if (leftShape === 'sunflower') {
-      drawSunflower(ctx, state.leftSlime.x, state.leftSlime.y, SLIME_RADIUS);
-    }
-    
-    if (rightShape.startsWith('helmet')) {
-      const type = rightShape.replace('helmet', '').toLowerCase();
-      drawHelmet(ctx, state.rightSlime.x, state.rightSlime.y, SLIME_RADIUS, type);
-    } else if (rightShape === 'labrador') {
-      drawLabrador(ctx, state.rightSlime.x, state.rightSlime.y, SLIME_RADIUS);
-    } else if (rightShape === 'tank') {
-      drawTank(ctx, state.rightSlime.x, state.rightSlime.y, SLIME_RADIUS);
-    } else if (rightShape === 'sunflower') {
-      drawSunflower(ctx, state.rightSlime.x, state.rightSlime.y, SLIME_RADIUS);
-    }
+    const drawAvatarShape = (shape, x, y) => {
+      if (shape.startsWith('helmet')) {
+        const type = shape.replace('helmet', '').toLowerCase();
+        drawHelmet(ctx, x, y, SLIME_RADIUS, type);
+      } else if (shape === 'labrador') {
+        drawLabrador(ctx, x, y, SLIME_RADIUS);
+      } else if (shape === 'tank') {
+        drawTank(ctx, x, y, SLIME_RADIUS);
+      } else if (shape === 'sunflower') {
+        drawSunflower(ctx, x, y, SLIME_RADIUS);
+      }
+    };
+
+    const drawAvatar = (shape, x, y, rotate) => {
+      if (!rotate) {
+        drawAvatarShape(shape, x, y);
+        return;
+      }
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(Math.PI);
+      drawAvatarShape(shape, 0, 0);
+      ctx.restore();
+    };
+
+    const shouldRotateTopPlayer = BOARD_ALIGNMENT === 'bottom_top';
+    drawAvatar(leftShape, state.leftSlime.x, state.leftSlime.y, shouldRotateTopPlayer);
+    drawAvatar(rightShape, state.rightSlime.x, state.rightSlime.y, false);
     
     // Draw ball
     const ballType = selectedBall || 'cannabis';
