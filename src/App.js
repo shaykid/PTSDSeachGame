@@ -1810,10 +1810,7 @@ const SlimeSoccer = () => {
 
       // Calculate distances and ball state
       const aiDistToBall = Math.sqrt(Math.pow(ai.x - ball.x, 2) + Math.pow(ai.y - ball.y, 2));
-      const ballDistToAIGoal = Math.abs(ball.y - AI_GOAL_Y);
-      const ballDistToHumanGoal = Math.abs(ball.y - HUMAN_GOAL_Y);
       const ballMovingTowardsAIGoal = ball.vy < -1;
-      const ballMovingTowardsHumanGoal = ball.vy > 1;
       const ballInAIHalf = ball.y < GAME_HEIGHT / 2;
 
       // Stuck detection
@@ -1831,13 +1828,10 @@ const SlimeSoccer = () => {
       let moveSpeed = SLIME_SPEED * 1.15; // Base speed boost for more aggressive AI
 
       // Calculate how dangerous the situation is for defense
-      const ballDangerZone = ball.y < GAME_HEIGHT * 0.25; // Ball very close to AI goal
-      const ballSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
       const ballBetweenAIGoalAndAI = ball.y < ai.y - SLIME_RADIUS * 0.2;
       const ballTouchingAI = aiDistToBall <= SLIME_RADIUS + BALL_RADIUS;
+      const ballSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
       const ballIdleBetweenAIGoalAndAI = ballBetweenAIGoalAndAI && ballSpeed < 0.4;
-      const needsUrgentDefense = ballMovingTowardsAIGoal && ballDangerZone && ballSpeed > 2;
-
       // If the ball is idle between the AI and its goal, advance and attack instead of retreating.
       if (ballIdleBetweenAIGoalAndAI) {
         newTargetX = ball.x;
@@ -1847,34 +1841,7 @@ const SlimeSoccer = () => {
           shouldGrab = true;
         }
       }
-      // DEFENSE: Only defend when ball is actively threatening AI goal
-      else if (needsUrgentDefense || (ballMovingTowardsAIGoal && ball.y < GAME_HEIGHT * 0.35)) {
-        // Emergency defense - intercept the ball
-        let interceptX = ball.x;
-        let interceptY = ball.y;
-
-        // Find where ball will be
-        for (let pred of predictions) {
-          if (pred.y < GAME_HEIGHT * 0.3) {
-            const timeToReach = Math.sqrt(Math.pow(ai.x - pred.x, 2) + Math.pow(ai.y - pred.y, 2)) / (SLIME_SPEED * 1.4);
-            if (timeToReach <= pred.time + 3) {
-              interceptX = pred.x;
-              interceptY = pred.y;
-              break;
-            }
-          }
-        }
-
-        newTargetX = interceptX;
-        newTargetY = Math.max(interceptY - SLIME_RADIUS, GROUND_HEIGHT + SLIME_RADIUS + 10);
-        moveSpeed = SLIME_SPEED * 1.4; // Fast defense
-
-        // If very close to ball, grab and clear it away
-        if (aiDistToBall < SLIME_RADIUS + BALL_RADIUS + 35) {
-          shouldGrab = true;
-        }
-      }
-      // AGGRESSIVE ATTACK: Most of the time, AI should be attacking
+      // AGGRESSIVE ATTACK: Always attack and try to score in the human goal
       else {
         // Offensive positioning - push ball towards human goal aggressively
         const attackOffset = 20; // Position closer to ball for more aggressive pushing
@@ -2105,7 +2072,10 @@ const SlimeSoccer = () => {
     let shouldGrab = false;
     let moveSpeed = SLIME_SPEED;
 
-    if (ballDistanceToOpponentGoal < ballDistanceToAIGoal * 1.5 ||
+    const alwaysAttack = true;
+
+    if (alwaysAttack ||
+        ballDistanceToOpponentGoal < ballDistanceToAIGoal * 1.5 ||
         (ball.x > FIELD_WIDTH * 0.35 && !ballMovingTowardsAIGoal)) {
 
       const directAttackX = ball.x - 30;
@@ -2778,11 +2748,16 @@ const SlimeSoccer = () => {
         }
 
         const otherSlime = index === 0 ? state.rightSlime : state.leftSlime;
-        const dx = state.ball.x - slime.x;
-        const dy = state.ball.y - slime.y;
+        const collisionOffset = SLIME_RADIUS * 0.25;
+        const collisionRadius = SLIME_RADIUS * 0.85;
+        const isRotatedAvatar = BOARD_ALIGNMENT === 'bottom_top' && slimeName === 'left';
+        const collisionCenterX = slime.x;
+        const collisionCenterY = slime.y + (isRotatedAvatar ? collisionOffset : -collisionOffset);
+        const dx = state.ball.x - collisionCenterX;
+        const dy = state.ball.y - collisionCenterY;
         const distance = Math.sqrt(dx * dx + dy * dy);
 
-        if (distance < SLIME_RADIUS + BALL_RADIUS) {
+        if (distance < collisionRadius + BALL_RADIUS) {
           // In bottom_top mode, unhalt the ball when hit
           if (BOARD_ALIGNMENT === 'bottom_top' && state.ball.haltedUntil === Infinity) {
             state.ball.haltedUntil = 0;
