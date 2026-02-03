@@ -2542,7 +2542,7 @@ const SlimeSoccer = () => {
       state.ball.verticalContactSince = null;
     };
 
-    if (!state.ball.grabbedBy && !ballIsHalted) {
+    if (!state.ball.grabbedBy) {
       if (isTouchingSideBorder) {
         if (state.ball.sideContactSince === null) {
           state.ball.sideContactSince = currentTime;
