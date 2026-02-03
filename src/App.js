@@ -333,6 +333,7 @@ const SlimeSoccer = () => {
   const goalAudioRef = useRef(null);
   const goalTimeoutRef = useRef(null);
   const outAnimationTimeoutRef = useRef(null);
+  const outResetTimeoutRef = useRef(null);
   const startGameTimeoutRef = useRef(null);
   const idleAudioRef = useRef(null);
   const idleAudioTimeoutRef = useRef(null);
@@ -1253,6 +1254,12 @@ const SlimeSoccer = () => {
     return () => {
       if (goalTimeoutRef.current) {
         clearTimeout(goalTimeoutRef.current);
+      }
+      if (outAnimationTimeoutRef.current) {
+        clearTimeout(outAnimationTimeoutRef.current);
+      }
+      if (outResetTimeoutRef.current) {
+        clearTimeout(outResetTimeoutRef.current);
       }
       if (startGameTimeoutRef.current) {
         clearTimeout(startGameTimeoutRef.current);
@@ -2566,6 +2573,18 @@ const SlimeSoccer = () => {
       state.ball.immediateOutSince = null;
     };
 
+    const OUT_RESET_DELAY_MS = 1000;
+    const scheduleOutReset = () => {
+      if (outResetTimeoutRef.current) return;
+      triggerOutAnimation();
+      state.ball.vx = 0;
+      state.ball.vy = 0;
+      outResetTimeoutRef.current = setTimeout(() => {
+        resetBallToCenter();
+        outResetTimeoutRef.current = null;
+      }, OUT_RESET_DELAY_MS);
+    };
+
     // Immediate out-of-bounds check - ball completely outside playing area
     if (BOARD_ALIGNMENT === 'bottom_top') {
       const goalStart = (GAME_WIDTH - GOAL_WIDTH) / 2;
@@ -2591,8 +2610,7 @@ const SlimeSoccer = () => {
         if (state.ball.immediateOutSince === null) {
           state.ball.immediateOutSince = currentTime;
         } else if (currentTime - state.ball.immediateOutSince >= IMMEDIATE_OUT_THRESHOLD_MS) {
-          triggerOutAnimation();
-          resetBallToCenter();
+          scheduleOutReset();
         }
       } else {
         state.ball.immediateOutSince = null;
@@ -2604,8 +2622,7 @@ const SlimeSoccer = () => {
         if (state.ball.sideContactSince === null) {
           state.ball.sideContactSince = currentTime;
         } else if (currentTime - state.ball.sideContactSince >= BORDER_CONTACT_THRESHOLD_MS) {
-          triggerOutAnimation();
-          resetBallToCenter();
+          scheduleOutReset();
         }
       } else {
         state.ball.sideContactSince = null;
@@ -2615,8 +2632,7 @@ const SlimeSoccer = () => {
         if (state.ball.verticalContactSince === null) {
           state.ball.verticalContactSince = currentTime;
         } else if (currentTime - state.ball.verticalContactSince >= BORDER_CONTACT_THRESHOLD_MS) {
-          triggerOutAnimation();
-          resetBallToCenter();
+          scheduleOutReset();
         }
       } else {
         state.ball.verticalContactSince = null;
@@ -2649,8 +2665,7 @@ const SlimeSoccer = () => {
       if (state.ball.playerPinningBorderSince === null) {
         state.ball.playerPinningBorderSince = currentTime;
       } else if (currentTime - state.ball.playerPinningBorderSince >= PINNING_THRESHOLD_MS) {
-        triggerOutAnimation();
-        resetBallToCenter();
+        scheduleOutReset();
       }
     } else {
       state.ball.playerPinningBorderSince = null;
