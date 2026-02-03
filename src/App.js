@@ -1489,9 +1489,7 @@ const SlimeSoccer = () => {
       stuckSince: null, // timestamp when ball became stuck
       lastStuckCheckPos: { x: 0, y: 0 },
       bouncingToCenter: false, // true when ball is bouncing to center after being stuck
-      ignoredCharacter: null, // 'left' or 'right' - the first character to ignore during bounce (legacy)
-      ignoreAllCharacters: false, // true when ball should ignore ALL characters during border bounce
-      borderTouchSince: null // timestamp when ball started touching border
+      ignoredCharacter: null // 'left' or 'right' - the first character to ignore during bounce
     }
   });
 
@@ -1630,8 +1628,6 @@ const SlimeSoccer = () => {
     state.ball.lastStuckCheckPos = { x: state.ball.x, y: state.ball.y };
     state.ball.bouncingToCenter = false;
     state.ball.ignoredCharacter = null;
-    state.ball.ignoreAllCharacters = false;
-    state.ball.borderTouchSince = null;
   };
 
   const resetGame = () => {
@@ -1806,80 +1802,31 @@ const SlimeSoccer = () => {
       const ballSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
       const needsUrgentDefense = ballMovingTowardsAIGoal && ballDangerZone && ballSpeed > 2;
 
-      // Check if ball is predicted to enter the AI's goal
-      let ballWillEnterGoal = false;
-      let goalThreatPrediction = null;
-      for (let pred of predictions) {
-        // Check if ball will reach the goal area
-        if (pred.y < GROUND_HEIGHT + BALL_RADIUS + 20) {
-          if (pred.x > goalStart && pred.x < goalEnd) {
-            ballWillEnterGoal = true;
-            goalThreatPrediction = pred;
-            break;
-          }
-        }
-      }
-
-      // ACTIVE GOALKEEPING: Position between ball and goal when ball threatens goal
-      const ballInGoalDangerZone = ball.y < GAME_HEIGHT * 0.4 && ball.x > goalStart - 50 && ball.x < goalEnd + 50;
-      const needsActiveGoalkeeping = ballWillEnterGoal || (ballMovingTowardsAIGoal && ballInGoalDangerZone);
-
-      // DEFENSE: Actively defend when ball threatens the AI goal
-      if (needsUrgentDefense || needsActiveGoalkeeping || (ballMovingTowardsAIGoal && ball.y < GAME_HEIGHT * 0.35)) {
-        // Goal protection mode - position between ball and goal
+      // DEFENSE: Only defend when ball is actively threatening AI goal
+      if (needsUrgentDefense || (ballMovingTowardsAIGoal && ball.y < GAME_HEIGHT * 0.35)) {
+        // Emergency defense - intercept the ball
         let interceptX = ball.x;
         let interceptY = ball.y;
 
-        if (ballWillEnterGoal && goalThreatPrediction) {
-          // Ball is predicted to enter goal - intercept at the predicted location
-          interceptX = goalThreatPrediction.x;
-          interceptY = goalThreatPrediction.y;
-
-          // Position slightly in front of where the ball will be
-          const timeToReach = Math.sqrt(Math.pow(ai.x - interceptX, 2) + Math.pow(ai.y - interceptY, 2)) / (SLIME_SPEED * 1.5);
-          if (timeToReach > goalThreatPrediction.time) {
-            // Can't reach in time - position in goal center to block
-            interceptX = goalCenterX;
-            interceptY = GROUND_HEIGHT + SLIME_RADIUS + 15;
-          }
-          moveSpeed = SLIME_SPEED * 1.5; // Maximum speed for goal save
-        } else {
-          // Find where ball will be
-          for (let pred of predictions) {
-            if (pred.y < GAME_HEIGHT * 0.3) {
-              const timeToReach = Math.sqrt(Math.pow(ai.x - pred.x, 2) + Math.pow(ai.y - pred.y, 2)) / (SLIME_SPEED * 1.4);
-              if (timeToReach <= pred.time + 3) {
-                interceptX = pred.x;
-                interceptY = pred.y;
-                break;
-              }
+        // Find where ball will be
+        for (let pred of predictions) {
+          if (pred.y < GAME_HEIGHT * 0.3) {
+            const timeToReach = Math.sqrt(Math.pow(ai.x - pred.x, 2) + Math.pow(ai.y - pred.y, 2)) / (SLIME_SPEED * 1.4);
+            if (timeToReach <= pred.time + 3) {
+              interceptX = pred.x;
+              interceptY = pred.y;
+              break;
             }
           }
-          moveSpeed = SLIME_SPEED * 1.4; // Fast defense
-        }
-
-        // Clamp intercept X to stay within goal area for better blocking
-        if (needsActiveGoalkeeping || ballWillEnterGoal) {
-          // Stay centered on goal but adjust towards ball
-          const goalDefenseX = goalCenterX + (ball.x - goalCenterX) * 0.5;
-          interceptX = Math.max(goalStart + SLIME_RADIUS, Math.min(goalEnd - SLIME_RADIUS, goalDefenseX));
         }
 
         newTargetX = interceptX;
         newTargetY = Math.max(interceptY - SLIME_RADIUS, GROUND_HEIGHT + SLIME_RADIUS + 10);
+        moveSpeed = SLIME_SPEED * 1.4; // Fast defense
 
-        // If very close to ball, grab and clear it away from goal
+        // If very close to ball, grab and clear it away
         if (aiDistToBall < SLIME_RADIUS + BALL_RADIUS + 35) {
           shouldGrab = true;
-        }
-
-        // If ball is very close to goal line and AI is nearby, prioritize blocking
-        if (ball.y < GROUND_HEIGHT + BALL_RADIUS + 60 && Math.abs(ball.x - goalCenterX) < GOAL_WIDTH / 2 + 30) {
-          // Emergency - get directly in front of goal
-          newTargetX = Math.max(goalStart + SLIME_RADIUS, Math.min(goalEnd - SLIME_RADIUS, ball.x));
-          newTargetY = GROUND_HEIGHT + SLIME_RADIUS + 10;
-          moveSpeed = SLIME_SPEED * 1.6; // Emergency speed
-          shouldGrab = true; // Try to grab and clear
         }
       }
       // AGGRESSIVE ATTACK: Most of the time, AI should be attacking
@@ -2555,92 +2502,6 @@ const SlimeSoccer = () => {
       }
     }
 
-    // Border touch detection - if ball touches border for 4+ seconds, bounce to center ignoring ALL avatars
-    const BORDER_STUCK_THRESHOLD_MS = 4000; // 4 seconds
-    const BORDER_TOUCH_MARGIN = 5; // pixels - how close to border to count as touching
-
-    if (!ballIsHalted && !state.ball.grabbedBy && state.ball.haltedUntil !== Infinity) {
-      // Check if ball is touching any border
-      const goalStart = (GAME_WIDTH - GOAL_WIDTH) / 2;
-      const goalEnd = goalStart + GOAL_WIDTH;
-
-      let isTouchingBorder = false;
-
-      if (BOARD_ALIGNMENT === 'bottom_top') {
-        // Check left/right walls
-        if (state.ball.x <= BALL_RADIUS + BORDER_TOUCH_MARGIN ||
-            state.ball.x >= GAME_WIDTH - BALL_RADIUS - BORDER_TOUCH_MARGIN) {
-          isTouchingBorder = true;
-        }
-        // Check top/bottom boundaries (excluding goal areas)
-        if (state.ball.y <= GROUND_HEIGHT + BALL_RADIUS + BORDER_TOUCH_MARGIN &&
-            !(state.ball.x > goalStart && state.ball.x < goalEnd)) {
-          isTouchingBorder = true;
-        }
-        if (state.ball.y >= GAME_HEIGHT - GROUND_HEIGHT - BALL_RADIUS - BORDER_TOUCH_MARGIN &&
-            !(state.ball.x > goalStart && state.ball.x < goalEnd)) {
-          isTouchingBorder = true;
-        }
-      } else {
-        // right_left mode
-        if (state.ball.x <= BALL_RADIUS + BORDER_TOUCH_MARGIN ||
-            state.ball.x >= GAME_WIDTH - BALL_RADIUS - BORDER_TOUCH_MARGIN) {
-          isTouchingBorder = true;
-        }
-        if (state.ball.y <= BALL_RADIUS + BORDER_TOUCH_MARGIN ||
-            state.ball.y >= GAME_HEIGHT - GROUND_HEIGHT - BALL_RADIUS - BORDER_TOUCH_MARGIN) {
-          isTouchingBorder = true;
-        }
-      }
-
-      if (isTouchingBorder) {
-        if (state.ball.borderTouchSince === null) {
-          state.ball.borderTouchSince = currentTime;
-        } else if (currentTime - state.ball.borderTouchSince >= BORDER_STUCK_THRESHOLD_MS && !state.ball.bouncingToCenter) {
-          // Ball has been touching border for 4+ seconds - bounce to center ignoring ALL avatars!
-          const centerX = GAME_WIDTH / 2;
-          const centerY = GAME_HEIGHT / 2;
-
-          // Calculate direction to center
-          const dx = centerX - state.ball.x;
-          const dy = centerY - state.ball.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-
-          if (dist > 10) {
-            // Enable ignore all characters mode
-            state.ball.bouncingToCenter = true;
-            state.ball.ignoreAllCharacters = true;
-            state.ball.ignoredCharacter = null; // Clear legacy field
-
-            // Give ball velocity towards center
-            const bounceSpeed = 6;
-            state.ball.vx = (dx / dist) * bounceSpeed;
-            state.ball.vy = (dy / dist) * bounceSpeed;
-
-            // Reset border touch timer
-            state.ball.borderTouchSince = null;
-          }
-        }
-      } else {
-        // Not touching border - reset timer
-        state.ball.borderTouchSince = null;
-      }
-
-      // Check if ball reached center during bounce-to-center mode (for border bounce)
-      if (state.ball.bouncingToCenter && state.ball.ignoreAllCharacters) {
-        const centerX = GAME_WIDTH / 2;
-        const centerY = GAME_HEIGHT / 2;
-        const distToCenter = Math.sqrt(Math.pow(state.ball.x - centerX, 2) + Math.pow(state.ball.y - centerY, 2));
-
-        if (distToCenter < 50) {
-          // Reached center - stop bouncing to center mode
-          state.ball.bouncingToCenter = false;
-          state.ball.ignoreAllCharacters = false;
-          state.ball.ignoredCharacter = null;
-        }
-      }
-    }
-
     if (BOARD_ALIGNMENT === 'bottom_top') {
       // Bottom_top mode: walls on left/right, goals on top/bottom (centered, 50% width)
       const goalStart = (GAME_WIDTH - GOAL_WIDTH) / 2;
@@ -2737,12 +2598,7 @@ const SlimeSoccer = () => {
       [state.leftSlime, state.rightSlime].forEach((slime, index) => {
         const slimeName = index === 0 ? 'left' : 'right';
 
-        // Skip collision with ALL characters when ball is bouncing to center from border
-        if (state.ball.bouncingToCenter && state.ball.ignoreAllCharacters) {
-          return; // Skip ALL characters - ball passes through everyone until center
-        }
-
-        // Skip collision with specific ignored character when ball is bouncing to center (legacy behavior)
+        // Skip collision with ignored character when ball is bouncing to center
         if (state.ball.bouncingToCenter && state.ball.ignoredCharacter === slimeName) {
           return; // Skip this character - ball passes through
         }
@@ -2759,8 +2615,7 @@ const SlimeSoccer = () => {
           }
 
           // If ball was bouncing to center and hit a non-ignored character, end bounce mode
-          // (but don't end if ignoreAllCharacters is true - ball should reach center first)
-          if (state.ball.bouncingToCenter && !state.ball.ignoreAllCharacters) {
+          if (state.ball.bouncingToCenter) {
             state.ball.bouncingToCenter = false;
             state.ball.ignoredCharacter = null;
           }
