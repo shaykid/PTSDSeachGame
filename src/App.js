@@ -324,6 +324,7 @@ const SlimeSoccer = () => {
   const logoImageRef = useRef(null);
   const goalAudioRef = useRef(null);
   const goalTimeoutRef = useRef(null);
+  const outAnimationTimeoutRef = useRef(null);
   const startGameTimeoutRef = useRef(null);
   const idleAudioRef = useRef(null);
   const idleAudioTimeoutRef = useRef(null);
@@ -349,6 +350,7 @@ const SlimeSoccer = () => {
   const [selectedShapes, setSelectedShapes] = useState({ left: null, right: null });
   const [selectedBall, setSelectedBall] = useState(null);
   const [showGoalCelebration, setShowGoalCelebration] = useState(false);
+  const [showOutAnimation, setShowOutAnimation] = useState(false);
   const [isTouchDevice, setIsTouchDevice] = useState(false);
   const [historyOverlay, setHistoryOverlay] = useState({
     src: '',
@@ -1386,6 +1388,16 @@ const SlimeSoccer = () => {
     goalTimeoutRef.current = setTimeout(() => {
       setShowGoalCelebration(false);
     }, 1000);
+  }, []);
+
+  const triggerOutAnimation = useCallback(() => {
+    if (outAnimationTimeoutRef.current) {
+      clearTimeout(outAnimationTimeoutRef.current);
+    }
+    setShowOutAnimation(true);
+    outAnimationTimeoutRef.current = setTimeout(() => {
+      setShowOutAnimation(false);
+    }, 2000); // Show for 2 seconds
   }, []);
 
   // Update refs for goal callbacks (used for cross-device sync)
@@ -2549,6 +2561,7 @@ const SlimeSoccer = () => {
         if (state.ball.sideContactSince === null) {
           state.ball.sideContactSince = currentTime;
         } else if (currentTime - state.ball.sideContactSince >= BORDER_CONTACT_THRESHOLD_MS) {
+          triggerOutAnimation();
           resetBallToCenter();
         }
       } else {
@@ -2559,6 +2572,7 @@ const SlimeSoccer = () => {
         if (state.ball.verticalContactSince === null) {
           state.ball.verticalContactSince = currentTime;
         } else if (currentTime - state.ball.verticalContactSince >= BORDER_CONTACT_THRESHOLD_MS) {
+          triggerOutAnimation();
           resetBallToCenter();
         }
       } else {
@@ -2592,6 +2606,7 @@ const SlimeSoccer = () => {
       if (state.ball.playerPinningBorderSince === null) {
         state.ball.playerPinningBorderSince = currentTime;
       } else if (currentTime - state.ball.playerPinningBorderSince >= PINNING_THRESHOLD_MS) {
+        triggerOutAnimation();
         resetBallToCenter();
       }
     } else {
@@ -2780,6 +2795,7 @@ const SlimeSoccer = () => {
     playerMode,
     playGoalSound,
     triggerGoalCelebration,
+    triggerOutAnimation,
     updateAI,
     sendData,
     remoteConnected,
@@ -4478,7 +4494,22 @@ const SlimeSoccer = () => {
               </div>
             </div>
           )}
-          
+
+          {showOutAnimation && (
+            <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-50 overflow-hidden">
+              <div
+                className="text-red-600 font-bold out-animation-text whitespace-nowrap"
+                style={{
+                  fontSize: '25vw',
+                  textShadow: '4px 4px 8px rgba(0,0,0,0.5)',
+                  animation: 'slideLeftToRight 2s linear forwards'
+                }}
+              >
+                חוץ!
+              </div>
+            </div>
+          )}
+
           {winner && (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-20">
               <h2 className="text-3xl font-bold mb-4 text-green-400">
