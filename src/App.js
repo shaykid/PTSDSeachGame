@@ -1489,7 +1489,9 @@ const SlimeSoccer = () => {
       stuckSince: null, // timestamp when ball became stuck
       lastStuckCheckPos: { x: 0, y: 0 },
       bouncingToCenter: false, // true when ball is bouncing to center after being stuck
-      ignoredCharacter: null // 'left' or 'right' - the first character to ignore during bounce
+      ignoredCharacter: null, // 'left' or 'right' - the first character to ignore during bounce
+      sideContactSince: null, // timestamp when ball started touching left/right border
+      verticalContactSince: null // timestamp when ball started touching top/bottom border
     }
   });
 
@@ -1628,6 +1630,8 @@ const SlimeSoccer = () => {
     state.ball.lastStuckCheckPos = { x: state.ball.x, y: state.ball.y };
     state.ball.bouncingToCenter = false;
     state.ball.ignoredCharacter = null;
+    state.ball.sideContactSince = null;
+    state.ball.verticalContactSince = null;
   };
 
   const resetGame = () => {
@@ -2511,6 +2515,56 @@ const SlimeSoccer = () => {
           }
         }
       }
+    }
+
+    // Side/top/bottom border contact detection - reset ball to center after 3+ seconds near borders
+    const BORDER_CONTACT_THRESHOLD_MS = 3000; // 3 seconds
+    const borderContactMargin = 8;
+    const isTouchingSideBorder = state.ball.x <= BALL_RADIUS + borderContactMargin ||
+      state.ball.x >= GAME_WIDTH - BALL_RADIUS - borderContactMargin;
+    const isTouchingTopBottomBorder =
+      state.ball.y <= GROUND_HEIGHT + BALL_RADIUS + borderContactMargin ||
+      state.ball.y >= GAME_HEIGHT - GROUND_HEIGHT - BALL_RADIUS - borderContactMargin;
+
+    const resetBallToCenter = () => {
+      state.ball.x = GAME_WIDTH / 2;
+      state.ball.y = GAME_HEIGHT / 2;
+      state.ball.vx = 0;
+      state.ball.vy = 0;
+      state.ball.grabbedBy = null;
+      state.ball.grabAngle = 0;
+      state.ball.grabAngularVelocity = 0;
+      state.ball.bouncingToCenter = false;
+      state.ball.ignoredCharacter = null;
+      state.ball.stuckSince = null;
+      state.ball.lastStuckCheckPos = { x: state.ball.x, y: state.ball.y };
+      state.ball.sideContactSince = null;
+      state.ball.verticalContactSince = null;
+    };
+
+    if (!state.ball.grabbedBy && !ballIsHalted) {
+      if (isTouchingSideBorder) {
+        if (state.ball.sideContactSince === null) {
+          state.ball.sideContactSince = currentTime;
+        } else if (currentTime - state.ball.sideContactSince >= BORDER_CONTACT_THRESHOLD_MS) {
+          resetBallToCenter();
+        }
+      } else {
+        state.ball.sideContactSince = null;
+      }
+
+      if (isTouchingTopBottomBorder) {
+        if (state.ball.verticalContactSince === null) {
+          state.ball.verticalContactSince = currentTime;
+        } else if (currentTime - state.ball.verticalContactSince >= BORDER_CONTACT_THRESHOLD_MS) {
+          resetBallToCenter();
+        }
+      } else {
+        state.ball.verticalContactSince = null;
+      }
+    } else {
+      state.ball.sideContactSince = null;
+      state.ball.verticalContactSince = null;
     }
 
     if (BOARD_ALIGNMENT === 'bottom_top') {
