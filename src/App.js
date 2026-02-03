@@ -2570,14 +2570,16 @@ const SlimeSoccer = () => {
       const goalEnd = goalStart + GOAL_WIDTH;
       const isInGoalX = state.ball.x > goalStart && state.ball.x < goalEnd;
 
-      // Ball is above field (in top goal area) but not in goal opening
-      const isAboveField = state.ball.y < GROUND_HEIGHT && !isInGoalX;
-      // Ball is below field (in bottom goal area) but not in goal opening
-      const isBelowField = state.ball.y > GAME_HEIGHT - GROUND_HEIGHT && !isInGoalX;
-      // Ball is off the sides
-      const isOffSides = state.ball.x < 0 || state.ball.x > GAME_WIDTH;
+      // Ball edge is above field (in top goal area) but not in goal opening
+      const isAboveField = state.ball.y - BALL_RADIUS < GROUND_HEIGHT;
+      // Ball edge is below field (in bottom goal area) but not in goal opening
+      const isBelowField = state.ball.y + BALL_RADIUS > GAME_HEIGHT - GROUND_HEIGHT;
+      // Ball edge is off the sides
+      const isOffSides = state.ball.x - BALL_RADIUS < 0 || state.ball.x + BALL_RADIUS > GAME_WIDTH;
 
-      if ((isAboveField || isBelowField || isOffSides) && !state.ball.grabbedBy) {
+      const isOutOfField = isOffSides || (isAboveField && !isInGoalX) || (isBelowField && !isInGoalX);
+
+      if (isOutOfField && !state.ball.grabbedBy) {
         triggerOutAnimation();
         resetBallToCenter();
       }
