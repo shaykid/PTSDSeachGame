@@ -2540,7 +2540,7 @@ const SlimeSoccer = () => {
 
     // Side/top/bottom border contact detection - reset ball to center after 3+ seconds near borders
     const BORDER_CONTACT_THRESHOLD_MS = 3000; // 3 seconds
-    const borderContactMargin = 8;
+    const borderContactMargin = 0;
     const isTouchingSideBorder = state.ball.x <= BALL_RADIUS + borderContactMargin ||
       state.ball.x >= GAME_WIDTH - BALL_RADIUS - borderContactMargin;
     const isTouchingTopBottomBorder =
